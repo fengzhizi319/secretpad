@@ -89,6 +89,27 @@ pnpm run setup
 
 ### 5.1 仅启动 platform 应用（推荐）
 
+#### 什么是 platform 应用？
+
+`platform` 应用就是 SecretPad 的**主站 Web 应用**，也就是用户日常登录和操作的那个平台页面。在前端仓库 `secretpad-frontend` 的目录结构里：
+
+```text
+frontend-src/
+├── apps/
+│   ├── platform/     ← SecretPad 平台主站（你要运行的就是这个）
+│   └── docs/         ← 前端内部文档站点
+├── packages/
+│   ├── dag/          ← 工作流 DAG 画布组件
+│   └── utils/        ← 通用工具函数
+```
+
+- `apps/platform` 是一个基于 **Umi 4 + React + Ant Design** 的独立应用，它的 `package.json` 中 `name` 字段是 `secretpad`。
+- 因为 `pnpm --filter secretpad dev` 里的 `secretpad` 就是这个应用的包名，所以这条命令实际启动的就是 `apps/platform`。
+- 我们平时说的“启动 SecretPad 前端”，本质上就是启动 `platform` 这个应用。它负责登录页、项目管理、节点管理、数据管理、任务流编排等所有用户界面。
+- `apps/docs` 是前端团队内部的技术文档站点，普通用户开发时不需要启动；`packages/dag` 和 `packages/utils` 是 platform 依赖的共享包，已经在第 4 步通过 `pnpm run setup` 构建好了。
+
+因此，**“仅启动 platform 应用”就是“只启动 SecretPad 主站前端”的意思**，这是本地开发最常用的方式。
+
 ```bash
 pnpm --filter secretpad dev
 ```
