@@ -27,6 +27,8 @@ import java.util.Random;
 public class AuthConstants {
     public static final String TOKEN_NAME = "User-Token";
     public static final String USER_NAME = "admin";
+    // 本地开发临时固定密码，方便登录测试
+    public static final String DEFAULT_PASSWORD = "12345678";
     private volatile static String RANDOM_PASSWORD;
 
     /**
@@ -43,6 +45,9 @@ public class AuthConstants {
     }
 
     public static String getRandomPassword() {
+        // 本地开发临时固定密码，原随机密码逻辑已注释保留在 generateRandomPassword() 中
+        return DEFAULT_PASSWORD;
+        /*
         if (RANDOM_PASSWORD == null) {
             synchronized (AuthConstants.class) {
                 if (RANDOM_PASSWORD == null) {
@@ -51,9 +56,15 @@ public class AuthConstants {
             }
         }
         return RANDOM_PASSWORD;
+        */
     }
 
     public static String generateRandomPassword() {
+        /*
+         * 原随机 8 位密码生成逻辑，已临时注释以使用固定密码 admin/12345678。
+         * 需要恢复随机密码时，取消下方注释即可。
+         */
+        /*
         String upperCase = "ABCDEFGHJKMNPQRSTUVWXYZ";
         String lowerCase = "abcdefghjkmnpqrstuvwxyz";
         String numbers = "123456789";
@@ -85,5 +96,7 @@ public class AuthConstants {
             return generateRandomPassword();
         }
         return password.toString();
+        */
+        return DEFAULT_PASSWORD;
     }
 }
