@@ -19,7 +19,7 @@ SecretPad:
 
 ## Secretpad-frontend
 
-* [secretpad-frontend](https://github.com/secretflow/secretpad-frontend)
+* [secretpad-frontend](https://github.com/fengzhizi319/secretpad-frontend)
   is a frontend project of SecretPad, and you can use ```make build``` to deploy frontend code in a SecretPad project
 
 ```text

@@ -1,6 +1,6 @@
 # SecretPad 本地运行完整指南（前后端联调版）
 
-> 说明：SecretPad 主仓库（`secretpad`）本身不包含前端源码，前端代码位于独立仓库 [secretpad-frontend](https://github.com/secretflow/secretpad-frontend)。本指南描述如何在本地完整搭建 SecretPad **后端 Java 服务**和**前端 React 应用**，并完成前后端联调登录。
+> 说明：SecretPad 主仓库（`secretpad`）本身不包含前端源码，前端代码位于独立仓库 [secretpad-frontend](https://github.com/fengzhizi319/secretpad-frontend)。本指南描述如何在本地完整搭建 SecretPad **后端 Java 服务**和**前端 React 应用**，并完成前后端联调登录。
 
 如果你只想运行前端开发服务器，可直接跳到第 5 章；如果你已经搭好了后端，想了解如何与前端配合，可跳到第 8 章。
 
@@ -68,7 +68,7 @@ pnpm -v            # 8.8.0
 ```bash
 cd /home/charles/code/secretpad
 # 快速拉取（浅克隆 --depth=1，仅最新 1 个提交) SecretPad 前端最新代码到 #frontend-src 文件夹
-git clone --depth=1 https://github.com/secretflow/secretpad-frontend.git frontend-src
+git clone --depth=1 https://github.com/fengzhizi319/secretpad-frontend.git frontend-src
 ```
 
 ## 4. 安装依赖并构建 workspace 包
@@ -212,7 +212,7 @@ make build
 
 其中 `make build` 实际调用的是 `scripts/build/build.sh true`，关键逻辑如下：
 
-1. **获取前端最新 tag**：脚本从远程仓库 `https://github.com/secretflow/secretpad-frontend.git` 拉取最新的 tag 名称。
+1. **获取前端最新 tag**：脚本从远程仓库 `https://github.com/fengzhizi319/secretpad-frontend.git` 拉取最新的 tag 名称。
 2. **下载对应 tag 的前端产物**：从阿里云 OSS 下载名为 `<tag>.tar` 的预编译产物。
 3. **解压产物**：解压后得到 `dist/` 目录。
 4. **拷贝到后端资源目录**：把 `dist/` 下的所有静态文件复制到 `secretpad-web/src/main/resources/static/`。

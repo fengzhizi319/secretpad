@@ -17,7 +17,7 @@ SecretPad：
 
 ## Secretpad-frontend
 
-* [secretpad-frontend](https://github.com/secretflow/secretpad-frontend)
+* [secretpad-frontend](https://github.com/fengzhizi319/secretpad-frontend)
   是Secretpad的前端项目，你可以使用 ```make build``` 命令将前端代码部署在Secretpad项目中
 
 ```text
