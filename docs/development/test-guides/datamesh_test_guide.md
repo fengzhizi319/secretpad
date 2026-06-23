@@ -19,7 +19,7 @@
 - Apache Maven 3.8.8
 - OpenSSL（生成测试证书）
 
-可参考 [前端运行指南](../frontend_run_guide.md) 中“一键准备本地运行时”脚本，将 JDK 与 Maven 安装到项目 `.tools` 目录。
+可参考 [本地运行指南](../local_run_guide.md) 中“一键准备本地运行时”脚本，将 JDK 与 Maven 安装到项目 `.tools` 目录。
 
 设置环境变量：
 

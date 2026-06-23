@@ -7,7 +7,7 @@
 
     build_secretpad_cn
     ru_in_idea_cn
-    frontend_run_guide
+    local_run_guide
     test-guides/datamesh_test_guide
     build_image
     build_mvp
