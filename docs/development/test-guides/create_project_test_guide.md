@@ -122,7 +122,7 @@ Service 实现位于：
 安装依赖：
 
 ```bash
-cd frontend-src
+cd cd /home/charles/code/secretpad/frontend-src
 pnpm install
 ```
 
@@ -154,7 +154,39 @@ cd /home/charles/code/secretpad
   -Dtest=ProjectControllerTest#createProject \
   -DfailIfNoTests=false
 ```
+命令解释：
+1. cd /home/charles/code/secretpad ；
+   切换到项目根目录
+2. .tools/maven/bin/mvn ；
+   使用项目本地安装的 Maven（位于 .tools/maven/bin/ 目录下）
+   而不是系统全局的 Maven
+   这样可以确保使用特定版本的 Maven，避免版本兼容性问题
+3. test ；
+   Maven 的生命周期阶段，表示运行测试
+   会执行 src/test/java 目录下的单元测试
+4. -pl secretpad-web (或 --projects)  ；
+   只针对指定模块运行测试
+   在这个多模块项目中，只测试 secretpad-web 模块
+   不测试其他模块（如 secretpad-service、secretpad-persistence 等）
+   好处：节省时间，聚焦于特定模块
+5. -Dtest=ProjectControllerTest#createProject ；
+   精确指定要运行的测试方法
+   ProjectControllerTest: 测试类名
+   #createProject: 具体的测试方法名
+   只运行这一个测试方法，而不是整个测试类
+   格式：测试类名#测试方法名，路径为：secretpad\secretpad-web\src\test\java\org\secretflow\secretpad\web\controller\P2PProjectControllerTest.java
 
+
+6. -DfailIfNoTests=false ；
+   如果没有找到匹配的测试，不要构建失败
+   默认情况下，如果找不到测试，Maven 会报错
+   设置为 false 后，即使没找到测试也会继续执行
+   使用场景
+   这条命令通常用于：
+   调试单个测试：快速验证某个具体功能
+   开发过程中：只测试刚修改的代码相关部分
+   CI/CD 流程：针对性地运行特定测试
+   节省时间：避免运行全部测试套件
 #### 运行 P2P 创建项目测试
 
 ```bash

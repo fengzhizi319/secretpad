@@ -57,6 +57,615 @@ frontend-src/apps/platform/src/services/secretpad/
 ├── ...（共 26 个控制器文件）
 ```
 
+#### 2.2.1 代码生成原理
+
+**核心工具**：`@umijs/openapi` 是 UmiJS 官方提供的 OpenAPI 代码生成器，基于 Swagger/OpenAPI 3.0 规范。
+
+**生成流程**：
+
+```mermaid
+graph LR
+    A[后端Swagger JSON] --> B[@umijs/openapi解析]
+    B --> C[生成TypeScript类型]
+    B --> D[生成请求函数]
+    C --> E[typings.d.ts]
+    D --> F[Controller.ts文件]
+    E --> G[index.ts汇总导出]
+    F --> G
+```
+
+**配置文件**：`frontend-src/apps/platform/config/openapi.config.js`
+
+```javascript
+const { generateService } = require('@umijs/openapi');
+
+generateService({
+  // Swagger规范文件路径（URL或本地文件）
+  schemaPath: 'http://localhost:8080/v3/api-docs',
+  
+  // 生成的服务代码存放目录
+  serversPath: path.resolve(__dirname, '../', 'src', 'services'),
+  
+  // 项目子目录名称
+  projectName: 'secretpad',
+
+  // 指定HTTP请求库
+  requestLibPath: "import request from 'umi-request';",
+});
+```
+
+**运行方式**：
+
+```bash
+# 在项目根目录执行
+cd frontend-src/apps/platform
+node config/openapi.config.js
+```
+
+#### 2.2.2 生成规则详解
+
+##### （1）Controller 映射规则
+
+后端 Spring Boot Controller → 前端 TypeScript 模块文件：
+
+| 后端 Controller | 生成文件名 | 说明 |
+|---|---|---|
+| `AuthController` | `AuthController.ts` | 认证相关接口 |
+| `ProjectController` | `ProjectController.ts` | 项目管理接口 |
+| `NodeController` | `NodeController.ts` | 节点管理接口 |
+| `GraphController` | `GraphController.ts` | DAG图执行接口 |
+| `DataController` | `DataController.ts` | 数据上传下载接口 |
+| `DatatableController` | `DatatableController.ts` | 数据表管理接口 |
+| `DataSourceController` | `DataSourceController.ts` | 数据源管理接口 |
+| `ModelManagementController` | `ModelManagementController.ts` | 模型管理接口 |
+| `MessageController` | `MessageController.ts` | 消息通知接口 |
+| `ScheduledController` | `ScheduledController.ts` | 定时任务接口 |
+
+**命名转换规则**：
+- 原始生成：小驼峰格式（如 `authController.ts`）
+- 项目规范：大驼峰格式（如 `AuthController.ts`）
+- 转换逻辑：在 `openapi.config.js` 中通过 `fs.renameSync` 将首字母大写
+
+##### （2）函数命名规则
+
+后端方法名 → 前端函数名：
+
+| 后端方法 | HTTP方法 | 生成函数名 | 示例 |
+|---|---|---|---|
+| `createProject` | POST | `createProject` | `API.ProjectController.createProject()` |
+| `listProject` | POST | `listProject` | `API.ProjectController.listProject()` |
+| `getProject` | POST | `getProject` | `API.ProjectController.getProject()` |
+| `updateProject` | POST | `updateProject` | `API.ProjectController.updateProject()` |
+| `deleteProject` | POST | `deleteProject` | `API.ProjectController.deleteProject()` |
+| `addDatatableToProject` | POST | `addDatatableToProject` | `API.ProjectController.addDatatableToProject()` |
+
+**特殊处理**：
+- 如果后端有多个同名方法但参数不同，会自动添加序号后缀（如 `listProject`, `listProject_1`）
+- GET 请求的参数会转换为 query string
+- POST/PUT 请求的参数放在 JSON body 中
+
+##### （3）TypeScript 类型生成
+
+**请求参数类型**：根据 `@RequestBody` 的 Java 类生成对应的 TypeScript interface。
+
+示例：后端 Java DTO
+
+```java
+public class CreateProjectRequest {
+    private String projectId;
+    private String name;
+    private String description;
+    private List<String> nodeIds;
+}
+```
+
+生成的 TypeScript 类型（在 `typings.d.ts` 中）：
+
+```typescript
+namespace API {
+  interface CreateProjectRequest {
+    projectId?: string;
+    name?: string;
+    description?: string;
+    nodeIds?: string[];
+  }
+}
+```
+
+**响应数据类型**：根据 Controller 返回的泛型类型生成。
+
+示例：
+
+```typescript
+namespace API {
+  interface SecretPadResponse_ProjectDTO_ {
+    status?: {
+      code?: number;
+      msg?: string;
+    };
+    data?: ProjectDTO;
+  }
+  
+  interface ProjectDTO {
+    projectId?: string;
+    name?: string;
+    description?: string;
+    createTime?: string;
+    updateTime?: string;
+  }
+}
+```
+
+**类型命名规则**：
+- 格式：`SecretPadResponse_{DataType}_`
+- 使用下划线包裹泛型类型，避免 TypeScript 语法冲突
+- 嵌套类型会递归生成
+
+##### （4）请求函数生成模板
+
+每个生成的函数遵循统一模板：
+
+```typescript
+/**
+ * 创建项目
+ * @param body - 请求体参数
+ * @param options - 额外配置选项
+ * @returns Promise<API.SecretPadResponse_ProjectDTO_>
+ */
+export async function createProject(
+  body?: API.CreateProjectRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.SecretPadResponse_ProjectDTO_>('/api/v1alpha1/project/create', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+```
+
+**关键特性**：
+- **泛型返回类型**：`request<T>()` 确保类型安全
+- **可选参数**：`body?` 和 `options?` 都是可选的
+- **headers 合并**：全局拦截器设置的 header 会与函数内 header 合并
+- **options 透传**：支持运行时覆盖默认配置
+
+#### 2.2.3 生成的文件结构
+
+##### （1）index.ts - 汇总导出
+
+```typescript
+// 自动生成的 index.ts
+export * as AuthController from './AuthController';
+export * as UserController from './UserController';
+export * as NodeController from './NodeController';
+export * as ProjectController from './ProjectController';
+export * as GraphController from './GraphController';
+export * as DataController from './DataController';
+export * as DatatableController from './DatatableController';
+export * as DataSourceController from './DataSourceController';
+// ... 其他控制器
+
+// 导出所有类型定义
+export * as API from './typings';
+```
+
+**使用方式**：
+
+```typescript
+import { ProjectController, API } from '@/services/secretpad';
+
+// 调用API
+const result = await ProjectController.createProject({
+  projectId: 'proj-001',
+  name: '测试项目',
+});
+
+// 使用类型
+const params: API.CreateProjectRequest = {
+  projectId: 'proj-001',
+  name: '测试项目',
+};
+```
+
+##### （2）typings.d.ts - 类型定义
+
+包含所有请求参数、响应数据的 TypeScript 类型定义：
+
+```typescript
+declare namespace API {
+  // ========== 通用响应包装 ==========
+  interface SecretPadResponse<T = any> {
+    status?: {
+      code?: number;
+      msg?: string;
+    };
+    data?: T;
+  }
+  
+  // ========== 用户相关类型 ==========
+  interface LoginRequest {
+    name?: string;
+    passwordHash?: string;
+  }
+  
+  interface UserContextDTO {
+    userId?: string;
+    username?: string;
+    token?: string;
+    role?: string;
+  }
+  
+  // ========== 项目相关类型 ==========
+  interface CreateProjectRequest {
+    projectId?: string;
+    name?: string;
+    description?: string;
+    nodeIds?: string[];
+  }
+  
+  interface ProjectDTO {
+    projectId?: string;
+    name?: string;
+    description?: string;
+    createTime?: string;
+    updateTime?: string;
+    status?: string;
+  }
+  
+  // ... 更多类型定义
+}
+```
+
+##### （3）Controller.ts - 请求函数
+
+每个 Controller 对应一个文件，包含该控制器下所有接口的请求函数：
+
+```typescript
+// ProjectController.ts 示例
+import request from 'umi-request';
+
+/**
+ * 创建项目
+ */
+export async function createProject(
+  body?: API.CreateProjectRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.SecretPadResponse_ProjectDTO_>('/api/v1alpha1/project/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/**
+ * 查询项目列表
+ */
+export async function listProject(
+  body?: API.ListProjectRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.SecretPadResponse_ListProjectResponse_>('/api/v1alpha1/project/list', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/**
+ * 获取项目详情
+ */
+export async function getProject(
+  body?: API.GetProjectRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.SecretPadResponse_ProjectDTO_>('/api/v1alpha1/project/get', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+// ... 其他方法
+```
+
+#### 2.2.4 高级配置选项
+
+`generateService` 支持更多配置项：
+
+```javascript
+generateService({
+  schemaPath: 'http://localhost:8080/v3/api-docs',
+  serversPath: './src/services',
+  projectName: 'secretpad',
+  requestLibPath: "import request from 'umi-request';",
+  
+  // 自定义类型前缀
+  typeNamePrefix: 'API.',
+  
+  // 是否生成 mock 数据
+  mockFolder: './mock',
+  
+  // 过滤不需要生成的接口
+  apiFilter: (api) => {
+    // 只生成特定路径的接口
+    return api.path.startsWith('/api/v1alpha1');
+  },
+  
+  // 自定义函数命名规则
+  functionNameConverter: (operationId) => {
+    // 自定义转换逻辑
+    return camelCase(operationId);
+  },
+  
+  // 是否使用 hooks 形式
+  hook: {
+    enable: false,
+  },
+  
+  // 错误处理配置
+  errorThrower: true,
+});
+```
+
+#### 2.2.5 实际使用示例
+
+##### 场景 1：基本 CRUD 操作
+
+```typescript
+import { ProjectController, API } from '@/services/secretpad';
+import { message } from 'antd';
+
+// 创建项目
+const handleCreate = async () => {
+  const params: API.CreateProjectRequest = {
+    projectId: `proj-${Date.now()}`,
+    name: '新项目',
+    description: '项目描述',
+    nodeIds: ['node-1', 'node-2'],
+  };
+  
+  try {
+    const { status, data } = await ProjectController.createProject(params);
+    
+    if (status?.code === 0) {
+      message.success('创建成功');
+      console.log('项目ID:', data?.projectId);
+    } else {
+      message.error(status?.msg || '创建失败');
+    }
+  } catch (error) {
+    message.error('网络请求失败');
+  }
+};
+
+// 查询项目列表
+const handleList = async () => {
+  const { status, data } = await ProjectController.listProject({
+    pageNum: 1,
+    pageSize: 10,
+  });
+  
+  if (status?.code === 0 && data?.items) {
+    setProjectList(data.items);
+    setTotal(data.total);
+  }
+};
+
+// 删除项目
+const handleDelete = async (projectId: string) => {
+  const { status } = await ProjectController.deleteProject({ projectId });
+  
+  if (status?.code === 0) {
+    message.success('删除成功');
+    handleList(); // 刷新列表
+  }
+};
+```
+
+##### 场景 2：文件上传
+
+```typescript
+import { DataController } from '@/services/secretpad';
+
+const handleUpload = async (file: File, nodeId: string) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('nodeId', nodeId);
+  
+  const { status, data } = await DataController.upload(formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  
+  if (status?.code === 0) {
+    console.log('上传成功，文件名:', data?.fileName);
+  }
+};
+```
+
+##### 场景 3：带额外配置
+
+```typescript
+import { GraphController } from '@/services/secretpad';
+
+// 设置超时时间
+const result = await GraphController.startGraph(
+  { graphId: 'graph-001' },
+  {
+    timeout: 30000, // 30秒超时
+    retryCount: 3,  // 重试3次
+  }
+);
+
+// 自定义错误处理
+try {
+  await GraphController.startGraph({ graphId: 'graph-001' });
+} catch (error) {
+  if (error.response?.status === 401) {
+    // 未授权，跳转登录
+    history.push('/login');
+  } else {
+    message.error('启动失败');
+  }
+}
+```
+
+#### 2.2.6 重新生成流程
+
+当后端 API 发生变更时，需要重新生成前端代码：
+
+**步骤 1：获取最新的 Swagger 文档**
+
+```bash
+# 确保后端服务正在运行
+curl http://localhost:8080/v3/api-docs > swagger.json
+```
+
+**步骤 2：更新配置中的 schemaPath**
+
+```javascript
+// openapi.config.js
+const SWAGGER_JSON_PATH = 'http://localhost:8080/v3/api-docs';
+// 或者使用本地文件
+// const SWAGGER_JSON_PATH = './swagger.json';
+```
+
+**步骤 3：执行生成脚本**
+
+```bash
+cd frontend-src/apps/platform
+node config/openapi.config.js
+```
+
+**步骤 4：验证生成结果**
+
+```bash
+# 检查生成的文件
+ls -la src/services/secretpad/
+
+# 查看是否有编译错误
+npm run type-check
+```
+
+**步骤 5：提交代码**
+
+```bash
+git add src/services/secretpad/
+git commit -m "chore: regenerate API client from latest swagger"
+```
+
+#### 2.2.7 注意事项与最佳实践
+
+**⚠️ 注意事项**：
+
+1. **不要手动修改生成的文件**：每次重新生成会覆盖所有更改
+2. **保持后端 Swagger 注解完整**：确保 Controller 方法有正确的 `@Operation`、`@Parameter` 等注解
+3. **类型兼容性**：Java 的 `Long` 类型在 TypeScript 中可能是 `number` 或 `string`，需注意精度问题
+4. **枚举类型**：Java Enum 会转换为 TypeScript Union Type
+5. **泛型处理**：复杂的泛型类型可能无法完美转换，需要手动补充类型定义
+
+**✅ 最佳实践**：
+
+1. **封装业务层**：在生成的 API 客户端之上再封装一层 service，隔离变化
+   
+   ```typescript
+   // services/project.service.ts
+   import { ProjectController, API } from '@/services/secretpad';
+   
+   export class ProjectService {
+     static async createProject(params: API.CreateProjectRequest) {
+       const { status, data } = await ProjectController.createProject(params);
+       
+       if (status?.code !== 0) {
+         throw new Error(status?.msg || '创建失败');
+       }
+       
+       return data;
+     }
+     
+     static async listProjects(pageNum: number, pageSize: number) {
+       const { status, data } = await ProjectController.listProject({
+         pageNum,
+         pageSize,
+       });
+       
+       if (status?.code !== 0) {
+         throw new Error(status?.msg || '查询失败');
+       }
+       
+       return {
+         items: data?.items || [],
+         total: data?.total || 0,
+       };
+     }
+   }
+   ```
+
+2. **类型复用**：优先使用生成的类型，避免重复定义
+
+3. **错误统一处理**：在全局拦截器中处理常见错误码
+
+4. **版本管理**：为不同的后端版本维护不同的 API 客户端分支
+
+5. **CI/CD 集成**：在构建流程中自动检测 Swagger 变化并重新生成
+
+#### 2.2.8 故障排查
+
+**问题 1：生成失败，提示无法连接 Swagger URL**
+
+```bash
+# 解决方案：确保后端服务正在运行
+curl http://localhost:8080/v3/api-docs
+
+# 或使用本地文件
+const SWAGGER_JSON_PATH = './swagger.json';
+```
+
+**问题 2：生成的类型不正确**
+
+```typescript
+// 检查后端 DTO 是否有正确的 Jackson 注解
+@JsonProperty("user_id")  // 确保字段名一致
+private String userId;
+
+// 或在 TypeScript 中手动修正
+type ManualFix = Omit<API.SomeType, 'wrongField'> & {
+  correctField: string;
+};
+```
+
+**问题 3：函数名冲突**
+
+```javascript
+// 在 openapi.config.js 中自定义命名规则
+functionNameConverter: (operationId, method, path) => {
+  // 添加路径前缀避免冲突
+  const prefix = path.split('/').filter(Boolean).join('_');
+  return `${prefix}_${operationId}`;
+}
+```
+
+**问题 4：缺少某些接口**
+
+```bash
+# 检查后端 Controller 是否有 @Tag 注解
+@Tag(name = "项目管理", description = "项目相关接口")
+@RestController
+@RequestMapping("/api/v1alpha1/project")
+public class ProjectController { ... }
+
+# 检查 Swagger 配置是否扫描到该 Controller
+```
+
 生成的函数模式示例：
 
 ```ts
