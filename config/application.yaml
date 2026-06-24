@@ -1,61 +1,99 @@
+# ============================================================
+# SecretPad 应用配置文件
+# ============================================================
+# 本配置文件包含 SecretPad 隐私计算平台的所有核心配置项
+# 支持多种部署模式：CENTER（中心化）、EDGE（边缘）、P2P（点对点）
+# ============================================================
+
+# ------------------------------------------------------------
+# 服务器基础配置
+# ------------------------------------------------------------
 server:
+  # Tomcat Web 服务器配置
   tomcat:
     accesslog:
-      enabled: true
-      directory: /var/log/secretpad
+      enabled: true                          # 启用访问日志，记录所有 HTTP 请求
+      directory: /var/log/secretpad          # 访问日志存储目录
+  
+  # Servlet 容器配置
   servlet:
     encoding:
-      charset: UTF-8
-      enabled: true
-      force: true
+      charset: UTF-8                         # 默认字符编码，支持中文等多语言
+      enabled: true                          # 启用字符编码过滤器
+      force: true                            # 强制使用指定编码，忽略请求头中的编码设置
     session:
-      timeout: 30m
-  http-port: 8080
-  http-port-inner: 9001
-  port: 443
+      timeout: 30m                           # 会话超时时间：30分钟，超时后用户需重新登录
+  
+  # 端口配置
+  http-port: 8080                            # HTTP 服务端口（非加密）
+  http-port-inner: 9001                      # 内部通信端口，用于集群内节点间通信
+  port: 443                                  # HTTPS 服务端口（加密，生产环境推荐）
+  
+  # SSL/TLS 安全配置
   ssl:
-    enabled: true
-    key-store: "file:./config/server.jks"
-    key-store-password: ${KEY_PASSWORD:secretpad}
-    key-alias: secretpad-server
-    key-password: ${KEY_PASSWORD:secretpad}
-    key-store-type: JKS
+    enabled: true                            # 启用 HTTPS 加密传输
+    key-store: "file:./config/server.jks"   # SSL 证书密钥库文件路径（JKS 格式）
+    key-store-password: ${KEY_PASSWORD:secretpad}  # 密钥库密码，支持环境变量覆盖，默认 secretpad
+    key-alias: secretpad-server              # 证书别名，用于标识服务器证书
+    key-password: ${KEY_PASSWORD:secretpad}  # 私钥密码，通常与密钥库密码相同
+    key-store-type: JKS                      # 密钥库类型：Java KeyStore
+  
+  # HTTP 压缩配置，减少网络传输量
   compression:
-    enabled: true
+    enabled: true                            # 启用响应内容压缩
     mime-types: text/html,text/xml,text/plain,text/css,application/javascript,application/json
-    min-response-size: 1024
+                                             # 需要压缩的 MIME 类型列表
+    min-response-size: 1024                  # 最小压缩阈值：1KB，小于此大小的响应不压缩
 
+# ------------------------------------------------------------
+# Spring 框架核心配置
+# ------------------------------------------------------------
 spring:
+  # Quartz 定时任务调度器配置
   quartz:
-    job-store-type: jdbc
+    job-store-type: jdbc                     # 任务存储方式：数据库（支持集群和持久化）
     jdbc:
-      initialize-schema: never
+      initialize-schema: never               # 不自动初始化数据库表结构，需手动执行 SQL 脚本
     properties:
-      org.quartz.scheduler.instanceName: secretpadScheduler
-      org.quartz.jobStore.isClustered: false
+      org.quartz.scheduler.instanceName: secretpadScheduler  # 调度器实例名称
+      org.quartz.jobStore.isClustered: false                 # 是否启用集群模式（单节点部署设为 false）
+  
+  # 异步任务调度线程池配置
   task:
     scheduling:
       pool:
-        size: 10
+        size: 10                             # 调度线程池大小：最多同时执行 10 个定时任务
+  
+  # 应用基本信息
   application:
-    name: secretpad
+    name: secretpad                          # 应用名称，用于日志标识、监控指标等
+  
+  # JPA (Java Persistence API) 数据访问层配置
   jpa:
-    database-platform: org.hibernate.community.dialect.SQLiteDialect
-    show-sql: false
+    database-platform: org.hibernate.community.dialect.SQLiteDialect  # 数据库方言：SQLite
+    show-sql: false                          # 不显示执行的 SQL 语句（生产环境建议关闭）
     properties:
       hibernate:
-        format_sql: false
-    open-in-view: false
+        format_sql: false                    # 不格式化 SQL 输出，减少日志体积
+    open-in-view: false                      # 禁用 Open-In-View 模式，避免性能问题和反模式
+  
+  # 主数据源配置（业务数据存储）
   datasource:
     default:
-      driver-class-name: org.sqlite.JDBC
-      jdbc-url: jdbc:sqlite:./db/secretpad.sqlite
+      driver-class-name: org.sqlite.JDBC     # SQLite JDBC 驱动程序
+      jdbc-url: jdbc:sqlite:./db/secretpad.sqlite  # SQLite 数据库文件路径
+    
+    # Quartz 定时任务专用数据源（H2 内存数据库）
     quartz:
-      driver-class-name: org.h2.Driver
+      driver-class-name: org.h2.Driver       # H2 数据库驱动
       jdbc-url: jdbc:h2:./db/secretpadQuartz.mv.db;DB_CLOSE_ON_EXIT=FALSE
-      username: sa
-      password: password
-  #datasource used for mysql
+                                             # H2 数据库连接 URL，程序退出时不关闭数据库
+      username: sa                           # H2 默认用户名
+      password: password                     # H2 默认密码
+  # ============================================================
+  # MySQL 数据源配置示例（当前被注释，如需使用 MySQL 请取消注释并修改配置）
+  # 适用场景：生产环境需要更高性能和可靠性的数据库存储
+  # ============================================================
   #spring:
   #  task:
   #    scheduling:
@@ -64,206 +102,310 @@ spring:
   #  application:
   #    name: secretpad
   #  jpa:
-  #    database-platform: org.hibernate.dialect.MySQLDialect
+  #    database-platform: org.hibernate.dialect.MySQLDialect  # MySQL 数据库方言
   #    show-sql: false
   #    properties:
   #      hibernate:
   #        format_sql: false
   #  datasource:
-  #    driver-class-name: com.mysql.cj.jdbc.Driver
-  #    url: your mysql url
-  #    username:
-  #    password:
+  #    driver-class-name: com.mysql.cj.jdbc.Driver            # MySQL JDBC 驱动
+  #    url: your mysql url                                    # MySQL 连接地址，如 jdbc:mysql://localhost:3306/secretpad
+  #    username:                                              # 数据库用户名
+  #    password:                                              # 数据库密码
   #    hikari:
-  #      idle-timeout: 60000
-  #      maximum-pool-size: 10
-  #      connection-timeout: 5000
+  #      idle-timeout: 60000                                  # 连接空闲超时：60秒后关闭空闲连接
+  #      maximum-pool-size: 10                                # 最大连接池大小：最多 10 个数据库连接
+  #      connection-timeout: 5000                             # 连接超时：5秒内无法获取连接则抛出异常
+  # Jackson JSON 序列化/反序列化配置
   jackson:
     deserialization:
-      fail-on-missing-external-type-id-property: false
-      fail-on-ignored-properties: false
-      fail-on-unknown-properties: false
+      fail-on-missing-external-type-id-property: false  # 缺少外部类型 ID 时不抛出异常（兼容多态类型）
+      fail-on-ignored-properties: false                 # 遇到 @JsonIgnore 标注的属性时不报错
+      fail-on-unknown-properties: false                 # 遇到未知字段时不抛出异常（提高 API 兼容性）
     serialization:
-      fail-on-empty-beans: false
+      fail-on-empty-beans: false                        # 允许序列化空对象（没有字段的 Java Bean）
+  
+  # Web 国际化配置
   web:
-    locale: zh_CN # default locale, overridden by request "Accept-Language" header.
+    locale: zh_CN                                       # 默认语言区域：简体中文，可通过请求头 Accept-Language 覆盖
+  
+  # 缓存配置
   cache:
     jcache:
       config:
-        classpath:ehcache.xml
+        classpath:ehcache.xml                           # Ehcache 缓存配置文件路径，定义缓存策略和容量
 
+# ------------------------------------------------------------
+# Flyway 数据库迁移工具配置
+# 用于管理数据库 schema 版本升级，确保数据结构一致性
+# ------------------------------------------------------------
 flyway:
+  # 主数据源迁移配置
   default:
     locations:
-      - filesystem:./config/schema/center
-    baseline-on-migrate: true
-    encoding: UTF-8
+      - filesystem:./config/schema/center              # SQL 迁移脚本目录（根据部署模式可能是 center/edge/p2p）
+    baseline-on-migrate: true                          # 如果数据库不为空，自动创建基线版本
+    encoding: UTF-8                                    # SQL 脚本文件编码
+  
+  # Quartz 定时任务数据源迁移配置
   quartz:
-    baseline-on-migrate: true
-    encoding: UTF-8
+    baseline-on-migrate: true                          # 自动创建基线版本
+    encoding: UTF-8                                    # SQL 脚本编码
     locations:
-      - filesystem:./config/schema/quartz
+      - filesystem:./config/schema/quartz              # Quartz 相关表的 SQL 脚本目录
 
 
+# ------------------------------------------------------------
+# SpringDoc OpenAPI 文档配置（Swagger UI）
+# ------------------------------------------------------------
 springdoc:
   api-docs:
-    enabled: false
+    enabled: false                                     # 禁用 Swagger API 文档（生产环境建议关闭以提高安全性）
+
+# ------------------------------------------------------------
+# Spring Boot Actuator 监控端点配置
+# 提供应用健康检查、指标收集等运维功能
+# ------------------------------------------------------------
 management:
   endpoint:
     shutdown:
-      enabled: false
+      enabled: false                                   # 禁用远程关闭端点，防止误操作导致服务中断
     health:
-      show-details: always
+      show-details: always                             # 始终显示详细健康信息（包括数据库连接状态等）
   endpoints:
     web:
       exposure:
         include:
           # prometheus monitoring indicator interface does not have security protection. If you need to use it, please inject security protection. It is best to use an intranet environment.
-          #          - prometheus
-          - health
+          #          - prometheus                      # Prometheus 监控指标接口（已注释，无安全防护，仅在内网使用）
+          - health                                     # 暴露健康检查端点 /actuator/health
   metrics:
     tags:
-      application: ${spring.application.name}
+      application: ${spring.application.name}          # 监控指标标签：应用名称，便于在 Grafana 等工具中区分
 
+# ------------------------------------------------------------
+# Kuscia API 通信协议配置
+# Kuscia 是 SecretFlow 的底层分布式任务调度框架
+# ------------------------------------------------------------
 kusciaapi:
-  protocol: ${KUSCIA_PROTOCOL:tls}
+  protocol: ${KUSCIA_PROTOCOL:tls}                     # 通信协议：tls（加密）或 grpc（明文），默认 TLS
 
+# ------------------------------------------------------------
+# Kuscia 节点集群配置
+# 定义 SecretPad 可以连接的多个 Kuscia 节点（中心节点和参与方节点）
+# ------------------------------------------------------------
 kuscia:
   nodes:
-    - domainId: ${NODE_ID:kuscia-system}
-      mode: master
-      host: ${KUSCIA_API_ADDRESS:root-kuscia-master}
-      port: ${KUSCIA_API_PORT:8083}
-      protocol: ${KUSCIA_PROTOCOL:tls}
-      cert-file: config/certs/client.crt
-      key-file: config/certs/client.pem
-      token: config/certs/token
+    # ---- 中心节点（Master）配置 ----
+    - domainId: ${NODE_ID:kuscia-system}               # 域 ID：唯一标识节点，支持环境变量 NODE_ID 覆盖
+      mode: master                                     # 节点模式：master（中心调度节点）
+      host: ${KUSCIA_API_ADDRESS:root-kuscia-master}   # Kuscia API 服务地址，支持环境变量覆盖
+      port: ${KUSCIA_API_PORT:8083}                    # Kuscia API 服务端口
+      protocol: ${KUSCIA_PROTOCOL:tls}                 # 通信协议：TLS 加密
+      cert-file: config/certs/client.crt               # 客户端证书文件路径（双向 TLS 认证）
+      key-file: config/certs/client.pem                # 客户端私钥文件路径
+      token: config/certs/token                        # 访问令牌文件路径
 
-    - domainId: alice
-      mode: lite
-      host: ${KUSCIA_API_LITE_ALICE_ADDRESS:root-kuscia-lite-alice}
-      port: ${KUSCIA_API_PORT:8083}
-      protocol: ${KUSCIA_PROTOCOL:tls}
-      cert-file: config/certs/alice/client.crt
-      key-file: config/certs/alice/client.pem
-      token: config/certs/alice/token
+    # ---- 参与方节点 Alice 配置 ----
+    - domainId: alice                                  # Alice 参与方的域 ID
+      mode: lite                                       # 节点模式：lite（轻量级参与方节点）
+      host: ${KUSCIA_API_LITE_ALICE_ADDRESS:root-kuscia-lite-alice}  # Alice 节点 API 地址
+      port: ${KUSCIA_API_PORT:8083}                    # API 端口
+      protocol: ${KUSCIA_PROTOCOL:tls}                 # 通信协议
+      cert-file: config/certs/alice/client.crt         # Alice 的客户端证书
+      key-file: config/certs/alice/client.pem          # Alice 的客户端私钥
+      token: config/certs/alice/token                  # Alice 的访问令牌
 
-    - domainId: bob
-      mode: lite
-      host: ${KUSCIA_API_LITE_BOB_ADDRESS:root-kuscia-lite-bob}
-      port: ${KUSCIA_API_PORT:8083}
-      protocol: ${KUSCIA_PROTOCOL:tls}
-      cert-file: config/certs/bob/client.crt
-      key-file: config/certs/bob/client.pem
-      token: config/certs/bob/token
+    # ---- 参与方节点 Bob 配置 ----
+    - domainId: bob                                    # Bob 参与方的域 ID
+      mode: lite                                       # 节点模式：lite
+      host: ${KUSCIA_API_LITE_BOB_ADDRESS:root-kuscia-lite-bob}      # Bob 节点 API 地址
+      port: ${KUSCIA_API_PORT:8083}                    # API 端口
+      protocol: ${KUSCIA_PROTOCOL:tls}                 # 通信协议
+      cert-file: config/certs/bob/client.crt           # Bob 的客户端证书
+      key-file: config/certs/bob/client.pem            # Bob 的客户端私钥
+      token: config/certs/bob/token                    # Bob 的访问令牌
 
 
+# ------------------------------------------------------------
+# 隐私计算任务并发控制配置
+# ------------------------------------------------------------
 job:
-  max-parallelism: 1
+  max-parallelism: 1                                   # 最大并行度：同时只能执行 1 个隐私计算任务
+                                                     # 设置为 1 可避免资源竞争和数据冲突
 
+# ------------------------------------------------------------
+# SecretPad 核心业务配置
+# ------------------------------------------------------------
 secretpad:
+  # 日志配置
   logs:
-    path: ${SECRETPAD_LOG_PATH:/app/log}
-  deploy-mode: ${DEPLOY_MODE:ALL-IN-ONE} # MPC TEE ALL-IN-ONE
-  platform-type: CENTER
-  node-id: kuscia-system
-  center-platform-service: secretpad.master.svc
-  gateway: ${KUSCIA_GW_ADDRESS:127.0.0.1:80}
+    path: ${SECRETPAD_LOG_PATH:/app/log}               # 日志文件存储目录，支持环境变量 SECRETPAD_LOG_PATH 覆盖
+  
+  # 部署模式配置
+  deploy-mode: ${DEPLOY_MODE:ALL-IN-ONE}               # 部署模式：MPC（多方安全计算）、TEE（可信执行环境）、ALL-IN-ONE（一体化）
+                                                     # ALL-IN-ONE 适合单机测试，MPC/TEE 适合分布式生产环境
+  
+  # 平台类型配置
+  platform-type: CENTER                                # 平台架构类型：CENTER（中心化）、EDGE（边缘）、P2P（点对点）
+                                                     # CENTER：所有节点连接到中心节点；P2P：节点间直接通信
+  
+  # 当前节点标识
+  node-id: kuscia-system                               # 当前 SecretPad 实例所属的节点 ID
+  
+  # 中心平台服务地址（仅在 CENTER 模式下使用）
+  center-platform-service: secretpad.master.svc        # 中心平台服务的 Kubernetes Service 名称
+  
+  # 网关配置
+  gateway: ${KUSCIA_GW_ADDRESS:127.0.0.1:80}          # Kuscia 网关地址，用于数据传输和任务调度
+  
+  # 身份认证配置
   auth:
-    enabled: true
-    pad_name: ${SECRETPAD_USER_NAME}
-    pad_pwd: ${SECRETPAD_PASSWORD}
+    enabled: true                                      # 启用身份认证，要求用户提供用户名和密码
+    pad_name: ${SECRETPAD_USER_NAME}                   # 管理员用户名，通过环境变量 SECRETPAD_USER_NAME 设置
+    pad_pwd: ${SECRETPAD_PASSWORD}                     # 管理员密码，通过环境变量 SECRETPAD_PASSWORD 设置
+  
+  # HTTP 响应安全头配置
   response:
     extra-headers:
       Content-Security-Policy: "base-uri 'self';frame-src 'self';worker-src blob: 'self' data:;object-src 'self';"
+                                                     # 内容安全策略：限制资源加载来源，防止 XSS 攻击
+  
+  # 文件上传配置
   upload-file:
-    max-file-size: -1    # -1 means not limit, e.g.  200MB, 1GB
-    max-request-size: -1 # -1 means not limit, e.g.  200MB, 1GB
+    max-file-size: -1                                  # 单个文件最大大小：-1 表示无限制（也可设置为 200MB、1GB 等）
+    max-request-size: -1                               # 整个请求最大大小：-1 表示无限制
+  
+  # 数据存储目录
   data:
-    dir-path: /app/data/
+    dir-path: /app/data/                               # 用户上传文件和临时数据的存储路径
+  
+  # 数据同步配置（用于多节点数据一致性）
   datasync:
-    center: true
-    p2p: false
+    center: true                                       # 启用中心化数据同步模式
+    p2p: false                                         # 禁用 P2P 数据同步模式
+  
+  # 组件镜像版本配置
   version:
-    secretpad-image: ${SECRETPAD_IMAGE:0.5.0b0}
-    kuscia-image: ${KUSCIA_IMAGE:0.6.0b0}
-    secretflow-image: ${SECRETFLOW_IMAGE:1.4.0b0}
-    secretflow-serving-image: ${SECRETFLOW_SERVING_IMAGE:0.2.0b0}
-    tee-app-image: ${TEE_APP_IMAGE:0.1.0b0}
-    tee-dm-image: ${TEE_DM_IMAGE:0.1.0b0}
-    capsule-manager-sim-image: ${CAPSULE_MANAGER_SIM_IMAGE:0.1.2b0}
-    data-proxy-image: ${DATA_PROXY_IMAGE:0.1.0b0}
-    scql-image: ${SCQL_IMAGE:0.1.0b0}
-
+    secretpad-image: ${SECRETPAD_IMAGE:0.5.0b0}        # SecretPad 主程序镜像版本
+    kuscia-image: ${KUSCIA_IMAGE:0.6.0b0}              # Kuscia 调度框架镜像版本
+    secretflow-image: ${SECRETFLOW_IMAGE:1.4.0b0}      # SecretFlow 隐私计算框架镜像版本
+    secretflow-serving-image: ${SECRETFLOW_SERVING_IMAGE:0.2.0b0}  # SecretFlow 模型服务镜像版本
+    tee-app-image: ${TEE_APP_IMAGE:0.1.0b0}            # TEE 应用镜像版本（可信执行环境）
+    tee-dm-image: ${TEE_DM_IMAGE:0.1.0b0}              # TEE 数据管理器镜像版本
+    capsule-manager-sim-image: ${CAPSULE_MANAGER_SIM_IMAGE:0.1.2b0}  # Capsule 管理器模拟镜像
+    data-proxy-image: ${DATA_PROXY_IMAGE:0.1.0b0}      # 数据代理镜像版本
+    scql-image: ${SCQL_IMAGE:0.1.0b0}                  # SCQL（安全协作查询语言）镜像版本
+  
+  # 组件隐藏配置（前端界面不显示的组件）
   component:
     hide:
-      - secretflow/io/read_data:1.0.0
-      - secretflow/io/write_data:1.0.0
-      - secretflow/io/identity:1.0.0
-      - secretflow/io/data_sink:1.0.0
-      - secretflow/io/data_source:1.0.0
-      - secretflow/model/model_export:1.0.0
-      - secretflow/ml.train/slnn_train:0.0.1
-      - secretflow/ml.predict/slnn_predict:0.0.2
+      - secretflow/io/read_data:1.0.0                  # 隐藏原始数据读取组件
+      - secretflow/io/write_data:1.0.0                 # 隐藏原始数据写入组件
+      - secretflow/io/identity:1.0.0                   # 隐藏身份验证组件
+      - secretflow/io/data_sink:1.0.0                  # 隐藏数据接收器组件
+      - secretflow/io/data_source:1.0.0                # 隐藏数据源组件
+      - secretflow/model/model_export:1.0.0            # 隐藏模型导出组件
+      - secretflow/ml.train/slnn_train:0.0.1           # 隐藏 SLNN 训练组件
+      - secretflow/ml.predict/slnn_predict:0.0.2       # 隐藏 SLNN 预测组件
+                                                     # 这些组件通常是底层实现细节，不适合终端用户直接使用
+  
+  # Data Proxy 数据代理服务配置
   data-proxy:
-    enabled: ${DATAPROXY_ENABLE:true}
+    enabled: ${DATAPROXY_ENABLE:true}                  # 是否启用数据代理服务，支持环境变量覆盖
+  
+  # SCQL 安全查询配置
   scql:
-    enabled: ${SCQL_ENABLE:true}
-    component: secretflow/stats/scql_analysis:1.0.0
+    enabled: ${SCQL_ENABLE:true}                       # 是否启用 SCQL 功能
+    component: secretflow/stats/scql_analysis:1.0.0    # SCQL 分析组件标识
 
 
+# ------------------------------------------------------------
+# SecretFlow 集群设备配置
+# 定义隐私计算过程中使用的安全设备和通信协议
+# ------------------------------------------------------------
 sfclusterDesc:
+  # SPU（Secure Processing Unit）安全计算单元配置
   deviceConfig:
     spu: "{\"runtime_config\":{\"protocol\":\"SEMI2K\",\"field\":\"FM128\"},\"link_desc\":{\"connect_retry_times\":60,\"connect_retry_interval_ms\":1000,\"brpc_channel_protocol\":\"http\",\"brpc_channel_connection_type\":\"pooled\",\"recv_timeout_ms\":1200000,\"http_timeout_ms\":1200000}}"
+                                                     # SEMI2K 协议：半诚实敌手模型下的安全多方计算协议
+                                                     # FM128：128 位有限域
+                                                     # 连接重试 60 次，每次间隔 1 秒
+                                                     # 接收超时和 HTTP 超时均为 1200 秒（20 分钟）
+    
+    # HEU（Homomorphic Encryption Unit）同态加密单元配置
     heu: "{\"mode\": \"PHEU\", \"schema\": \"paillier\", \"key_size\": 2048}"
+                                                     # PHEU：部分同态加密单元
+                                                     # Paillier 算法：支持加法同态加密
+                                                     # 密钥长度：2048 位，提供足够的安全性
+  
+  # RayFed 分布式计算框架配置
   rayFedConfig:
-    crossSiloCommBackend: "brpc_link"
+    crossSiloCommBackend: "brpc_link"                # 跨节点通信后端：BRPC（百度 RPC 框架），高性能
 
+# ------------------------------------------------------------
+# TEE（Trusted Execution Environment）可信执行环境配置
+# ------------------------------------------------------------
 tee:
-  capsule-manager: capsule-manager.#.svc
+  capsule-manager: capsule-manager.#.svc             # Capsule 管理器服务地址模板，#.svc 为 Kubernetes 占位符
 
+# ------------------------------------------------------------
+# 数据同步实体配置
+# 定义需要在多节点间同步的数据库实体类列表
+# 用于 CENTER 或 P2P 模式下的数据一致性保证
+# ------------------------------------------------------------
 data:
   sync:
-    - org.secretflow.secretpad.persistence.entity.ProjectDO
-    - org.secretflow.secretpad.persistence.entity.ProjectNodeDO
-    - org.secretflow.secretpad.persistence.entity.NodeDO
-    - org.secretflow.secretpad.persistence.entity.NodeRouteDO
-    - org.secretflow.secretpad.persistence.entity.ProjectJobDO
-    - org.secretflow.secretpad.persistence.entity.ProjectTaskDO
-    - org.secretflow.secretpad.persistence.entity.ProjectDatatableDO
-    - org.secretflow.secretpad.persistence.entity.VoteRequestDO
-    - org.secretflow.secretpad.persistence.entity.VoteInviteDO
-    - org.secretflow.secretpad.persistence.entity.TeeDownLoadAuditConfigDO
-    - org.secretflow.secretpad.persistence.entity.NodeRouteApprovalConfigDO
-    - org.secretflow.secretpad.persistence.entity.TeeNodeDatatableManagementDO
-    - org.secretflow.secretpad.persistence.entity.ProjectModelServingDO
-    - org.secretflow.secretpad.persistence.entity.ProjectGraphNodeKusciaParamsDO
-    - org.secretflow.secretpad.persistence.entity.ProjectModelPackDO
-    - org.secretflow.secretpad.persistence.entity.FeatureTableDO
-    - org.secretflow.secretpad.persistence.entity.ProjectFeatureTableDO
-    - org.secretflow.secretpad.persistence.entity.ProjectGraphDomainDatasourceDO
-    - org.secretflow.secretpad.persistence.entity.ProjectScheduleDO
-    - org.secretflow.secretpad.persistence.entity.ProjectScheduleJobDO
-    - org.secretflow.secretpad.persistence.entity.ProjectScheduleTaskDO
+    - org.secretflow.secretpad.persistence.entity.ProjectDO              # 项目信息
+    - org.secretflow.secretpad.persistence.entity.ProjectNodeDO          # 项目节点关联
+    - org.secretflow.secretpad.persistence.entity.NodeDO                 # 节点信息
+    - org.secretflow.secretpad.persistence.entity.NodeRouteDO            # 节点路由配置
+    - org.secretflow.secretpad.persistence.entity.ProjectJobDO           # 项目作业信息
+    - org.secretflow.secretpad.persistence.entity.ProjectTaskDO          # 项目任务信息
+    - org.secretflow.secretpad.persistence.entity.ProjectDatatableDO     # 项目数据表
+    - org.secretflow.secretpad.persistence.entity.VoteRequestDO          # 投票请求
+    - org.secretflow.secretpad.persistence.entity.VoteInviteDO           # 投票邀请
+    - org.secretflow.secretpad.persistence.entity.TeeDownLoadAuditConfigDO  # TEE 下载审计配置
+    - org.secretflow.secretpad.persistence.entity.NodeRouteApprovalConfigDO # 节点路由审批配置
+    - org.secretflow.secretpad.persistence.entity.TeeNodeDatatableManagementDO # TEE 节点数据表管理
+    - org.secretflow.secretpad.persistence.entity.ProjectModelServingDO  # 项目模型服务
+    - org.secretflow.secretpad.persistence.entity.ProjectGraphNodeKusciaParamsDO # 图节点 Kuscia 参数
+    - org.secretflow.secretpad.persistence.entity.ProjectModelPackDO     # 项目模型打包
+    - org.secretflow.secretpad.persistence.entity.FeatureTableDO         # 特征表
+    - org.secretflow.secretpad.persistence.entity.ProjectFeatureTableDO  # 项目特征表
+    - org.secretflow.secretpad.persistence.entity.ProjectGraphDomainDatasourceDO # 图域数据源
+    - org.secretflow.secretpad.persistence.entity.ProjectScheduleDO      # 项目调度计划
+    - org.secretflow.secretpad.persistence.entity.ProjectScheduleJobDO   # 调度作业
+    - org.secretflow.secretpad.persistence.entity.ProjectScheduleTaskDO  # 调度任务
 
-
+# ------------------------------------------------------------
+# 内部端口路径白名单配置
+# 这些路径可以通过内部端口（9001）访问，无需经过外部认证
+# 用于节点间同步和管理操作
+# ------------------------------------------------------------
 inner-port:
   path:
-    - /api/v1alpha1/vote_sync/create
-    - /api/v1alpha1/user/node/resetPassword
-    - /sync
-    - /api/v1alpha1/data/sync
-# ip block config (None of them are allowed in the configured IP list)
+    - /api/v1alpha1/vote_sync/create                   # 投票同步创建接口
+    - /api/v1alpha1/user/node/resetPassword            # 节点密码重置接口
+    - /sync                                            # 通用数据同步接口
+    - /api/v1alpha1/data/sync                          # 数据同步接口
+
+# ------------------------------------------------------------
+# IP 地址黑名单配置（安全加固）
+# 禁止来自以下 IP 段的访问请求，防止内网穿透和 SSRF 攻击
+# ------------------------------------------------------------
 ip:
   block:
-    enable: true
+    enable: true                                       # 启用 IP 黑名单过滤
     list:
-      - 0.0.0.0/32
-      - 127.0.0.1/8
-      - 10.0.0.0/8
-      - 11.0.0.0/8
-      - 30.0.0.0/8
-      - 100.64.0.0/10
-      - 172.16.0.0/12
-      - 192.168.0.0/16
-      - 33.0.0.0/8
+      - 0.0.0.0/32                                     # 阻止所有地址（特殊地址）
+      - 127.0.0.1/8                                    # 阻止本地回环地址（防止本地绕过）
+      - 10.0.0.0/8                                     # 阻止 A 类私有地址段
+      - 11.0.0.0/8                                     # 阻止保留地址段
+      - 30.0.0.0/8                                     # 阻止保留地址段
+      - 100.64.0.0/10                                  # 阻止 CGNAT（运营商级 NAT）地址段
+      - 172.16.0.0/12                                  # 阻止 B 类私有地址段
+      - 192.168.0.0/16                                 # 阻止 C 类私有地址段
+      - 33.0.0.0/8                                     # 阻止保留地址段
+                                                     # 注意：生产环境中应根据实际网络拓扑调整此配置
+                                                     # 如果 SecretPad 部署在内网，需要允许相应的私有地址段
