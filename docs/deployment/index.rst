@@ -10,4 +10,5 @@
     center
     edge
     autonomy
+    nginx_integration
     log
