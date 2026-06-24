@@ -78,3 +78,8 @@ docs/_build
 /config/ehcache-data/
 /db/secretpadQuartz.mv.db.mv.db
 /.cloudide/
+
+### Local tools / runtime / sub-project ###
+.tools/
+scripts/config/certs/
+frontend-src/
