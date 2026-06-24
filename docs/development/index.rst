@@ -8,6 +8,7 @@
     build_secretpad_cn
     ru_in_idea_cn
     local_run_guide
+    api_and_kuscia_datamesh_integration
     test-guides/datamesh_test_guide
     build_image
     build_mvp
