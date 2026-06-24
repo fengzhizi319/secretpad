@@ -9,6 +9,8 @@
     ru_in_idea_cn
     local_run_guide
     api_and_kuscia_datamesh_integration
+    data_layer
+    operations_layer
     test-guides/datamesh_test_guide
     build_image
     build_mvp
