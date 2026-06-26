@@ -644,9 +644,130 @@ function deploy_kuscia_lite_alice_bob_tee() {
 	fi
 }
 
+# ------------------------------------------------------------------
+# Smart Kuscia restart helpers
+# ------------------------------------------------------------------
+function is_kuscia_running() {
+	local ctr=$1
+	docker ps --filter "name=^/${ctr}$" --format '{{.Names}}' | grep -q "^${ctr}$"
+}
+
+function is_kuscia_exists() {
+	local ctr=$1
+	docker ps -a --filter "name=^/${ctr}$" --format '{{.Names}}' | grep -q "^${ctr}$"
+}
+
+function wait_kuscia_ready() {
+	local ctr=$1
+	local mode=$2
+	log "[INFO] waiting for ${ctr} (${mode}) to be ready ..."
+	if [ "$mode" = "master" ]; then
+		do_http_probe "$ctr" "https://127.0.0.1:6443" 60
+	else
+		do_http_probe "$ctr" "https://127.0.0.1:8070/healthZ" 30 true
+	fi
+	log "[INFO] ${ctr} is ready"
+}
+
+function start_existing_kuscia() {
+	local ctr=$1
+	local mode=$2
+	log "[INFO] starting existing stopped container ${ctr}"
+	docker start "${ctr}"
+	wait_kuscia_ready "$ctr" "$mode"
+}
+
+function deploy_master() {
+	export MODE='master'
+	export NODE_ID='kuscia-system'
+	prepare_environment
+	deploy_kuscia
+}
+
+function deploy_lite() {
+	local node=$1
+	local internal_port=$2
+	local metrics_port=$3
+	export MODE='lite'
+	export NODE_ID="$node"
+	export DOMAIN_HOST_INTERNAL_PORT="$internal_port"
+	export METRICS_PORT="$metrics_port"
+	add_kuscia_domain_lite
+	prepare_environment
+	deploy_kuscia
+}
+
+function ensure_master() {
+	local ctr="${USER}-kuscia-master"
+	if is_kuscia_running "$ctr"; then
+		log "[INFO] ${ctr} is already running, skip master deployment"
+		return 1
+	fi
+	if is_kuscia_exists "$ctr"; then
+		start_existing_kuscia "$ctr" "master"
+		return 1
+	fi
+	deploy_master
+	return 0
+}
+
+function ensure_lite() {
+	local node=$1
+	local internal_port=$2
+	local metrics_port=$3
+	local ctr="${USER}-kuscia-lite-${node}"
+	if [ "${MASTER_RECREATED:-false}" = "true" ] && is_kuscia_exists "$ctr"; then
+		log "[INFO] master was recreated, removing stale ${ctr} for fresh deployment"
+		docker rm -f "$ctr"
+	fi
+	if is_kuscia_running "$ctr"; then
+		log "[INFO] ${ctr} is already running, skip ${node} deployment"
+		return 1
+	fi
+	if is_kuscia_exists "$ctr"; then
+		start_existing_kuscia "$ctr" "lite"
+		return 1
+	fi
+	deploy_lite "$node" "$internal_port" "$metrics_port"
+	return 0
+}
+
+function prepare_post_setup_env() {
+	# KUSCIA_MASTER_CTR is set when master is deployed; restore it when master was skipped.
+	if [ -z "${KUSCIA_MASTER_CTR:-}" ]; then
+		export KUSCIA_MASTER_CTR="${KUSCIA_CTR_PREFIX}-${PAD_MASTER}"
+	fi
+	# add_alice_bob_data extracts bob.csv using KUSCIA_INSTALL_DIR; point it to bob.
+	export KUSCIA_INSTALL_DIR="${INSTALL_DIR}/${PAD_MASTER}/${PAD_DATA}/bob"
+}
+
+# ------------------------------------------------------------------
+# Main: smart restart or full deploy
+# ------------------------------------------------------------------
+MASTER_RECREATED=false
+LITE_NEWLY_DEPLOYED=false
+
+if ensure_master; then
+	MASTER_RECREATED=true
+fi
+
+if need_lite_alice_bob; then
+	if ensure_lite alice 23081 23084; then
+		LITE_NEWLY_DEPLOYED=true
+	fi
+	if ensure_lite bob 33081 33084; then
+		LITE_NEWLY_DEPLOYED=true
+	fi
+	if [ "$MASTER_RECREATED" = true ] || [ "$LITE_NEWLY_DEPLOYED" = true ]; then
+		prepare_post_setup_env
+		create_alice_bob_domain_route
+		add_alice_bob_data
+		del_alice_bob_dp_table
+	fi
+fi
+
+export MODE='master'
 prepare_environment
-deploy_kuscia
-deploy_kuscia_lite_alice_bob_tee
 clear_env
 end_time=$(date +%s)
 # shellcheck disable=SC2004
