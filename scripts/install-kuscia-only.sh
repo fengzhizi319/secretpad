@@ -14,6 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# ============================================================================
+# SecretPad Kuscia-only Installation Script
+# 仅安装 Kuscia 容器（Master + Lite 节点），不安装 SecretPad Web 容器
+# 用于本地开发调试，配合源码启动的 SecretPad 后端使用
+# 说明：本脚本仍需要 SECRETPAD_IMAGE，仅用于抽取 /app/scripts/deploy 下的公共脚本
+# ============================================================================
 
 export KUSCIA_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/kuscia:0.13.0b0"
 export SECRETPAD_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/secretpad:0.12.0b0"
@@ -25,8 +31,8 @@ export CAPSULE_MANAGER_SIM_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.co
 export DATAPROXY_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/dataproxy:0.3.0b0"
 export SCQL_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/scql:0.9.2b1"
 
-# MPC TEE ALL-IN-ONE
-export DEPLOY_MODE="ALL-IN-ONE"
+# MPC only: do not pull/register TEE images for local development
+export DEPLOY_MODE="MPC"
 export KUSCIA_PROTOCOL="tls"
 
 set -e
@@ -37,46 +43,27 @@ RED='\033[0;31m'
 usage() {
 	echo "$(basename "$0") DEPLOY_MODE [OPTIONS]
 NETWORK_MODE:
-    master            deploy master (default)
-    lite              deploy lite node
-    autonomy          deploy autonomy  node include secretpad,kuscia
-    autonomy-node     deploy autonomy-node  only kuscia autonomy
+    master            deploy master (default) with alice/bob lite nodes
 
-lite OPTIONS:
-    -m              [optional]  (Only used in lite mode)The master endpoint.
-    -n              [optional]  Domain id to be deployed.
-    -s              [optional]  The port exposed by secretpad-web, default 8080
-    -p              [optional]  The port exposed by kuscia-gateway, default 18080
-    -k              [optional]  The port exposed by kuscia-api-http, default 18082
-    -g              [optional]  The port exposed by kuscia-api-grpc, default 18083
-    -t              [optional]  (Only used in lite mode)The deploy token, get this token from secretpad platform.
-    -d              [optional]  The install directory. Default is ${INSTALL_DIR}.
+OPTIONS:
     -P              [optional]  kuscia protocol. Default is ${KUSCIA_PROTOCOL}.
-    -q              [optional]  (Only used in autonomy or lite mode)The port exposed for internal use by domain. You can set Env 'DOMAIN_HOST_INTERNAL_PORT' instead default 13081.
-    -b              [optional]  The port used to debug,default 5005
+    -p              [optional]  The port exposed by kuscia-gateway, default 18080 (only autonomy/p2p).
+    -k              [optional]  The port exposed by kuscia-api-http, default 18082 (only autonomy/p2p).
+    -g              [optional]  The port exposed by kuscia-api-grpc, default 18083 (only autonomy/p2p).
+    -q              [optional]  The port exposed for internal use by domain. Default 13081.
     -x              [optional]  kuscia METRICS_PORT default 13084
+    -d              [optional]  The install directory. Default is ${INSTALL_DIR}.
     -h              [optional]  Show this help text.
 
 example:
-    install.sh master
-    install.sh lite -n alice -m 'https://root-kuscia-master:1080' -t xdeploy-tokenx -p 18080  -k 18082 -g 18083 -s 8080 -q 13081 -x 13084 -P notls
-    install.sh autonomy -n alice -s 8080 -g 18083 -k 18082 -p 18080 -q 13081 -P mtls
-    install.sh autonomy-node -n alice -g 18083 -k 18082 -p 18080 -q 13081 -P mtls  -m 'https://secretpad:8080' -t xdeploy-tokenx
+    install-kuscia-only.sh master
+    install-kuscia-only.sh master -P notls
+    install-kuscia-only.sh master -P notls -q 13081 -x 13084
     "
 }
 case "${1}" in
-master | lite)
+master)
 	export MODE=$1
-	shift
-	;;
-autonomy)
-	export MODE=$1
-	export DEPLOY_MODE="MPC"
-	shift
-	;;
-autonomy-node)
-	export MODE=$1
-	export DEPLOY_MODE="MPC"
 	shift
 	;;
 -h)
@@ -84,24 +71,14 @@ autonomy-node)
 	exit
 	;;
 *)
-	echo "deploy_mode is invalid, must be autonomy, lite,  master(default)"
+	echo "deploy_mode is invalid, must be master"
 	usage
 	exit 1
 	;;
 esac
 
-while getopts 'm:n:s:p:k:g:t:d:P:q:b:x:h' option; do
+while getopts 'P:p:k:g:q:x:d:h' option; do
 	case "$option" in
-	m)
-		export KUSCIA_MASTER_ENDPOINT=$OPTARG
-		export SECRETPAD_MASTER_ENDPOINT=$OPTARG
-		;;
-	n)
-		export NODE_ID=$OPTARG
-		;;
-	s)
-		export PAD_PORT=$OPTARG
-		;;
 	p)
 		export KUSCIA_GATEWAY_PORT=$OPTARG
 		;;
@@ -111,9 +88,6 @@ while getopts 'm:n:s:p:k:g:t:d:P:q:b:x:h' option; do
 	g)
 		export KUSCIA_API_GRPC_PORT=$OPTARG
 		;;
-	t)
-		export KUSCIA_TOKEN=$OPTARG
-		;;
 	d)
 		export INSTALL_DIR=$OPTARG
 		;;
@@ -122,9 +96,6 @@ while getopts 'm:n:s:p:k:g:t:d:P:q:b:x:h' option; do
 		;;
 	q)
 		export DOMAIN_HOST_INTERNAL_PORT=$OPTARG
-		;;
-	b)
-		export PAD_DEBUG_PORT=$OPTARG
 		;;
 	x)
 		export METRICS_PORT=$OPTARG
@@ -434,15 +405,6 @@ function delete_dp_datasource() {
 	echo
 }
 
-function deploy_secretpad() {
-	if ! is_p2p_node; then
-		bash "$I_PATH"/deploy/secretpad.sh -b "${PAD_DEBUG_PORT}"
-	fi
-	if is_p2p_node; then
-		post_kuscia_node
-	fi
-}
-
 function build_kuscia_master_endpoint() {
 	if is_alice_lite || is_bob_lite || is_tee_lite; then
 		# shellcheck disable=SC2155
@@ -585,9 +547,8 @@ function deploy_kuscia_lite_alice_bob_tee() {
 prepare_environment
 deploy_kuscia
 deploy_kuscia_lite_alice_bob_tee
-deploy_secretpad
 clear_env
 end_time=$(date +%s)
 # shellcheck disable=SC2004
 execution_time=$(($end_time - $start_time))
-log "All components started successfully, time spend: $execution_time second"
+log "Kuscia components started successfully (SecretPad container not deployed), time spend: $execution_time second"

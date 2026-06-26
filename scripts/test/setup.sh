@@ -17,7 +17,7 @@
 
 set -ex
 
-SECRETPAD_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+SECRETPAD_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
 
 echo "root path is: $SECRETPAD_ROOT"
 
