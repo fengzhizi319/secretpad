@@ -8,6 +8,16 @@
 
 > 注意：`install-kuscia-only.sh` 基于 `scripts/install.sh` 改造，去掉了 `kuscia-master-secretpad` 容器部署。它仍会从 `SECRETPAD_IMAGE` 中抽取 `/app/scripts/deploy` 下的公共脚本（`common/log.sh`、`common/utils.sh`、`common/secretpad.env` 等）用于初始化 Kuscia。
 
+## 与一键开发脚本的关系
+
+如果你希望一次性启动完整本地开发环境（环境检查 + 编译 + Kuscia + 前后端），请优先使用：
+
+```bash
+bash scripts/dev-start.sh
+```
+
+`install-kuscia-only.sh` 只负责 Kuscia 部分，适合需要手动控制后端/前端启动流程的场景。
+
 ## 快速开始
 
 ### 基本用法
