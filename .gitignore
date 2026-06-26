@@ -83,3 +83,13 @@ docs/_build
 .tools/
 scripts/config/certs/
 frontend-src/
+
+### Kuscia local deployment runtime artifacts ###
+logs/
+scripts/kuscia.sh
+scripts/register_app_image_0.sh
+scripts/install-kuscia-only-op.sh
+delete_dp_datasource-0.sh
+sf-serving*.yaml
+sf-scql*.yaml
+*-kuscia-*/

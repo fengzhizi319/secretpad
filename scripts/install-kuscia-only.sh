@@ -387,6 +387,106 @@ function check_and_init() {
 
 check_and_init
 
+# Patch deployment helpers to be non-TTY friendly, so this script can run
+# from automation, IDEs, nohup or other environments without a controlling terminal.
+echo -e "${GREEN}[INFO]${NC} patching deployment scripts to run without TTY"
+find "$I_PATH/deploy" -type f -name "*.sh" -exec sed -i 's/docker run -it --rm/docker run -i --rm/g; s/docker run -itd/docker run -id/g; s/docker exec -it/docker exec -i/g' {} +
+sed -i 's/docker run -it --rm/docker run -i --rm/g; s/docker run -itd/docker run -id/g; s/docker exec -it/docker exec -i/g' "$I_PATH/kuscia.sh"
+sed -i 's/docker run -it --rm/docker run -i --rm/g; s/docker run -itd/docker run -id/g; s/docker exec -it/docker exec -i/g' "$I_PATH/register_app_image_0.sh"
+
+# In non-interactive environments (e.g. IDEs, nohup) default the k3s-data prompt to "n"
+PATH_KUSCIA_SH="$I_PATH/kuscia.sh" python3 - <<'PY'
+import os, re
+path = os.environ['PATH_KUSCIA_SH']
+with open(path, 'r') as f:
+    content = f.read()
+old_block = '''      while true; do
+        read -rp "$(echo -e "${GREEN}Whether to retain k3s data?(y/n): ${NC}")" reuse
+        if [[ "$reuse" =~ ^[yYnN]$ ]]; then
+          break
+        else
+          echo -e "${GREEN}Invalid input, please enter 'y' or 'n'!${NC}"
+        fi
+      done'''
+new_block = '''      while true; do
+        if [ -t 0 ]; then
+          read -rp "$(echo -e "${GREEN}Whether to retain k3s data?(y/n): ${NC}")" reuse
+        else
+          echo -e "${GREEN}Non-interactive environment, defaulting to NOT retain k3s data (n).${NC}"
+          reuse=n
+        fi
+        if [[ "$reuse" =~ ^[yYnN]$ ]]; then
+          break
+        else
+          echo -e "${GREEN}Invalid input, please enter 'y' or 'n'!${NC}"
+        fi
+      done'''
+content = content.replace(old_block, new_block)
+with open(path, 'w') as f:
+    f.write(content)
+PY
+
+# In non-interactive environments default the "container already exists" prompt to recreate (y)
+PATH_KUSCIA_SH="$I_PATH/kuscia.sh" python3 - <<'PY'
+import os
+path = os.environ['PATH_KUSCIA_SH']
+with open(path, 'r') as f:
+    content = f.read()
+old_block = """  read -rp "$(echo -e ${GREEN}The container \\'${ctr}\\' already exists. Do you need to recreate it? [y/n]: ${NC})" yn
+  case $yn in
+  [Yy]*)
+    echo -e "${GREEN}Remove container ${ctr} ...${NC}"
+    docker rm -f $ctr
+    # need start your container
+    return 0
+    ;;
+  *)
+    echo -e "${YELLOW}installation exit.${NC}"
+    exit 0
+    ;;
+  esac"""
+new_block = """  if [ -t 0 ]; then
+    read -rp "$(echo -e ${GREEN}The container \\'${ctr}\\' already exists. Do you need to recreate it? [y/n]: ${NC})" yn
+  else
+    echo -e "${GREEN}Non-interactive environment, recreating existing container ${ctr}.${NC}"
+    yn=y
+  fi
+  case $yn in
+  [Yy]*)
+    echo -e "${GREEN}Remove container ${ctr} ...${NC}"
+    docker rm -f $ctr
+    # need start your container
+    return 0
+    ;;
+  *)
+    echo -e "${YELLOW}installation exit.${NC}"
+    exit 0
+    ;;
+  esac"""
+if old_block not in content:
+    raise RuntimeError("Could not find the 'container already exists' prompt block in kuscia.sh")
+content = content.replace(old_block, new_block)
+with open(path, 'w') as f:
+    f.write(content)
+PY
+
+# kuscia.sh copies register_app_image.sh from the Kuscia image into each domain work
+# directory at runtime. That copy still contains 'docker exec -it', so patch it after
+# every extraction before it is executed.
+PATH_KUSCIA_SH="$I_PATH/kuscia.sh" python3 - <<'PY'
+import os
+path = os.environ['PATH_KUSCIA_SH']
+with open(path, 'r') as f:
+    content = f.read()
+old_line = "docker run --rm $KUSCIA_IMAGE cat ${CTR_ROOT}/scripts/deploy/register_app_image.sh > ${DOMAIN_WORK_DIR}/register_app_image.sh && chmod u+x ${DOMAIN_WORK_DIR}/register_app_image.sh"
+new_lines = old_line + "\nsed -i 's/docker exec -it/docker exec -i/g' ${DOMAIN_WORK_DIR}/register_app_image.sh"
+if old_line not in content:
+    raise RuntimeError("Could not find register_app_image.sh copy line in kuscia.sh")
+content = content.replace(old_line, new_lines)
+with open(path, 'w') as f:
+    f.write(content)
+PY
+
 source "${I_PATH}/deploy/common/log.sh"
 source "${I_PATH}/deploy/common/utils.sh"
 source "${I_PATH}/deploy/common/secretpad.env"
@@ -401,7 +501,7 @@ function delete_dp_datasource() {
 		"$I_PATH"/deploy/common/delete_dp_datasource.sh >delete_dp_datasource-0.sh
 	log "delete_dp_datasource"
 	docker cp delete_dp_datasource-0.sh "${KUSCIA_CTR}":/home/kuscia
-	docker exec -it "${KUSCIA_CTR}" sh delete_dp_datasource-0.sh
+	docker exec -i "${KUSCIA_CTR}" sh delete_dp_datasource-0.sh
 	echo
 }
 
@@ -439,35 +539,35 @@ function deploy_kuscia() {
 	eval "${kuscia_cmd}"
 	if is_lite; then
 		if need_tee; then
-			bash register_app_image_0.sh -c "$KUSCIA_CTR" -i "$TEE_DM_IMAGE" --import
+			bash "$I_PATH"/register_app_image_0.sh -c "$KUSCIA_CTR" -i "$TEE_DM_IMAGE" --import
 		fi
 		if need_scql; then
-			bash register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SCQL_IMAGE" --import
+			bash "$I_PATH"/register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SCQL_IMAGE" --import
 		fi
 		if need_mpc; then
-			bash register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SECRETFLOW_SERVING_IMAGE" --import
+			bash "$I_PATH"/register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SECRETFLOW_SERVING_IMAGE" --import
 		fi
 		delete_dp_datasource
 	fi
 	if is_p2p; then
 		if need_mpc; then
 			applySfServingAppImage
-			bash register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SECRETFLOW_SERVING_IMAGE" --import
+			bash "$I_PATH"/register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SECRETFLOW_SERVING_IMAGE" --import
 		fi
 		if need_scql; then
 			applySfScqlAppImage
-			bash register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SCQL_IMAGE" --import
+			bash "$I_PATH"/register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SCQL_IMAGE" --import
 		fi
 		delete_dp_datasource
 	fi
 	if is_p2p_node; then
 		if need_mpc; then
 			applySfServingAppImage
-			bash register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SECRETFLOW_SERVING_IMAGE" --import
+			bash "$I_PATH"/register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SECRETFLOW_SERVING_IMAGE" --import
 		fi
 		if need_scql; then
 			applySfScqlAppImage
-			bash register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SCQL_IMAGE" --import
+			bash "$I_PATH"/register_app_image_0.sh -c "$KUSCIA_CTR" -i "$SCQL_IMAGE" --import
 		fi
 		delete_dp_datasource
 	fi
@@ -477,27 +577,27 @@ function deploy_kuscia() {
 			applySfScqlAppImage
 		fi
 	fi
-	log "docker exec -it ${KUSCIA_CTR} sh scripts/deploy/init_kusciaapi_client_certs.sh"
-	docker exec -it "${KUSCIA_CTR}" sh scripts/deploy/init_kusciaapi_client_certs.sh
+	log "docker exec -i ${KUSCIA_CTR} sh scripts/deploy/init_kusciaapi_client_certs.sh"
+	docker exec -i "${KUSCIA_CTR}" sh scripts/deploy/init_kusciaapi_client_certs.sh
 }
 
 function add_kuscia_domain_lite() {
 	# shellcheck disable=SC2155
-	export KUSCIA_TOKEN=$(docker exec -it "${USER}"-kuscia-master sh scripts/deploy/add_domain_lite.sh "${NODE_ID}")
+	export KUSCIA_TOKEN=$(docker exec -i "${USER}"-kuscia-master sh scripts/deploy/add_domain_lite.sh "${NODE_ID}")
 }
 
 function add_alice_bob_data() {
-	docker exec -it "${USER}"-kuscia-master scripts/deploy/create_domaindata_alice_table.sh alice
-	docker exec -it "${USER}"-kuscia-master scripts/deploy/create_domaindata_bob_table.sh bob
+	docker exec -i "${USER}"-kuscia-master scripts/deploy/create_domaindata_alice_table.sh alice
+	docker exec -i "${USER}"-kuscia-master scripts/deploy/create_domaindata_bob_table.sh bob
 	docker run --rm "$KUSCIA_IMAGE" cat /home/kuscia/var/storage/data/alice.csv >"$INSTALL_DIR"/"$PAD_MASTER"/"$PAD_DATA"/alice/alice.csv
 	docker run --rm "$KUSCIA_IMAGE" cat /home/kuscia/var/storage/data/bob.csv >"${KUSCIA_INSTALL_DIR}"/bob.csv
-	docker exec -it "${USER}"-kuscia-lite-alice curl https://127.0.0.1:8070/api/v1/datamesh/domaindatagrant/create -X POST -H 'content-type: application/json' -d '{"author":"alice","domaindata_id":"alice-table","grant_domain":"bob"}' --cacert var/certs/ca.crt --cert var/certs/ca.crt --key var/certs/ca.key
-	docker exec -it "${USER}"-kuscia-lite-bob curl https://127.0.0.1:8070/api/v1/datamesh/domaindatagrant/create -X POST -H 'content-type: application/json' -d '{"author":"bob","domaindata_id":"bob-table","grant_domain":"alice"}' --cacert var/certs/ca.crt --cert var/certs/ca.crt --key var/certs/ca.key
+	docker exec -i "${USER}"-kuscia-lite-alice curl https://127.0.0.1:8070/api/v1/datamesh/domaindatagrant/create -X POST -H 'content-type: application/json' -d '{"author":"alice","domaindata_id":"alice-table","grant_domain":"bob"}' --cacert var/certs/ca.crt --cert var/certs/ca.crt --key var/certs/ca.key
+	docker exec -i "${USER}"-kuscia-lite-bob curl https://127.0.0.1:8070/api/v1/datamesh/domaindatagrant/create -X POST -H 'content-type: application/json' -d '{"author":"bob","domaindata_id":"bob-table","grant_domain":"alice"}' --cacert var/certs/ca.crt --cert var/certs/ca.crt --key var/certs/ca.key
 }
 
 function del_alice_bob_dp_table() {
-	docker exec -it "${USER}"-kuscia-master kubectl delete domaindata alice-dp-table -n alice
-	docker exec -it "${USER}"-kuscia-master kubectl delete domaindata bob-dp-table -n bob
+	docker exec -i "${USER}"-kuscia-master kubectl delete domaindata alice-dp-table -n alice
+	docker exec -i "${USER}"-kuscia-master kubectl delete domaindata bob-dp-table -n bob
 }
 
 function deploy_kuscia_lite_alice_bob_tee() {
@@ -534,8 +634,8 @@ function deploy_kuscia_lite_alice_bob_tee() {
 			add_kuscia_domain_lite
 			prepare_environment
 			deploy_kuscia
-			bash register_app_image_0.sh -c "$KUSCIA_CTR" -i "$TEE_APP_IMAGE" --import
-			bash register_app_image_0.sh -c "$KUSCIA_CTR" -i "$CAPSULE_MANAGER_SIM_IMAGE" --import
+			bash "$I_PATH"/register_app_image_0.sh -c "$KUSCIA_CTR" -i "$TEE_APP_IMAGE" --import
+			bash "$I_PATH"/register_app_image_0.sh -c "$KUSCIA_CTR" -i "$CAPSULE_MANAGER_SIM_IMAGE" --import
 			init_tee
 		fi
 
