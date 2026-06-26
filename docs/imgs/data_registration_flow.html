@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecretPad 数据注册流程图</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .legend {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #1890ff;
+        }
+        .legend h3 {
+            margin-top: 0;
+            color: #1890ff;
+        }
+        .legend-item {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+        }
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SecretPad 数据注册流程图</h1>
+        <p class="subtitle">展示从前端到后端各组件的数据注册完整流程</p>
+        
+        <div class="mermaid">
+graph TB
+    subgraph "前端层 Frontend"
+        A[用户界面<br/>SecretPad Web UI] -->|1.选择数据源类型| B[数据源配置表单]
+        B -->|2.填写连接信息| C[提交数据注册请求]
+        C -->|3.HTTP POST| D[API Gateway]
+    end
+    
+    subgraph "后端服务层 Backend Services"
+        D -->|4.路由转发| E[secretpad-web<br/>Controller层]
+        E -->|5.参数验证| F[secretpad-service<br/>Service层]
+        F -->|6.业务逻辑处理| G[数据源适配器<br/>DataSourceAdapter]
+    end
+    
+    subgraph "Kuscia API层"
+        G -->|7.调用Kuscia API| H[Kuscia API Client<br/>client-java-kusciaapi]
+        H -->|8.gRPC请求| I[Kuscia Master<br/>API Server]
+    end
+    
+    subgraph "Kuscia Core层"
+        I -->|9.创建DataMesh资源| J[Kuscia DataMesh Controller]
+        J -->|10.验证节点权限| K[Domain Controller<br/>Alice/Bob Domain]
+        K -->|11.生成DataRef| L[DataMesh Registry<br/>数据存储引用]
+    end
+    
+    subgraph "存储层 Storage"
+        L -->|12.持久化元数据| M[(MySQL数据库<br/>secretpad-persistence)]
+        M -->|13.返回DataID| N[DataMesh完成注册]
+    end
+    
+    subgraph "响应流程 Response"
+        N -->|14.注册成功| O[Kuscia API响应]
+        O -->|15.gRPC响应| P[Kuscia Client]
+        P -->|16.返回结果| Q[Service层更新状态]
+        Q -->|17.保存到本地DB| R[(SecretPad DB)]
+        R -->|18.JSON响应| S[Controller返回]
+        S -->|19.HTTP 200| T[前端显示成功]
+        T -->|20.刷新列表| U[数据源管理页面]
+    end
+    
+    style A fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style D fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style E fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style F fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style H fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style I fill:#e8f5e9,stroke:#388e3c,stroke-width:3px
+    style J fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style K fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style L fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style M fill:#fff9c4,stroke:#fbc02d,stroke-width:2px
+    style R fill:#fff9c4,stroke:#fbc02d,stroke-width:2px
+    style T fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+        </div>
+        
+        <div class="legend">
+            <h3>图例说明</h3>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #e3f2fd; border-color: #1976d2;"></div>
+                <span><strong>前端层</strong>：用户交互界面（React + TypeScript）</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #fff3e0; border-color: #f57c00;"></div>
+                <span><strong>API网关</strong>：请求路由和负载均衡</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #f3e5f5; border-color: #7b1fa2;"></div>
+                <span><strong>后端服务</strong>：Java Spring Boot应用（secretpad-web/service）</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #e8f5e9; border-color: #388e3c;"></div>
+                <span><strong>Kuscia层</strong>：隐私计算框架核心（Master/Domain）</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #fce4ec; border-color: #c2185b;"></div>
+                <span><strong>DataMesh</strong>：分布式数据网格管理系统</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #fff9c4; border-color: #fbc02d;"></div>
+                <span><strong>持久化层</strong>：MySQL数据库存储元数据</span>
+            </div>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 20px; background-color: #e8f5e9; border-radius: 5px;">
+            <h3 style="color: #2e7d32; margin-top: 0;">关键步骤说明</h3>
+            <ol style="line-height: 1.8;">
+                <li><strong>数据源配置</strong>：用户在前端选择数据源类型（MySQL/OSS/ODPS），填写连接信息（host、port、用户名、密码等）</li>
+                <li><strong>Kuscia API调用</strong>：后端通过gRPC调用Kuscia Master API，创建DataMesh资源</li>
+                <li><strong>Domain权限验证</strong>：Kuscia验证当前Domain（如Alice或Bob）是否有权限注册该数据源</li>
+                <li><strong>DataRef生成</strong>：DataMesh为数据源生成唯一的DataRef标识符，用于后续任务调度</li>
+                <li><strong>双重持久化</strong>：元数据同时存储在Kuscia DataMesh和SecretPad本地数据库中</li>
+                <li><strong>异步通知</strong>：注册完成后，前端通过WebSocket或轮询获取最新数据源列表</li>
+            </ol>
+        </div>
+    </div>
+    
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>

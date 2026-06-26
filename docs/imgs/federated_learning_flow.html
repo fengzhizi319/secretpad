@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecretPad 联邦学习流程图</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .legend {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #1890ff;
+        }
+        .legend h3 {
+            margin-top: 0;
+            color: #1890ff;
+        }
+        .legend-item {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+        }
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+        }
+        .workflow-steps {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #fff3e0;
+            border-radius: 5px;
+        }
+        .workflow-steps h3 {
+            color: #e65100;
+            margin-top: 0;
+        }
+        .step-detail {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e3f2fd;
+            border-left: 4px solid #1976d2;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SecretPad 联邦学习完整流程图</h1>
+        <p class="subtitle">以纵向逻辑回归（VLR）为例，展示从任务创建到模型训练的全流程</p>
+        
+        <div class="mermaid">
+graph TB
+    subgraph "阶段1: 任务创建 Task Creation"
+        A[前端: 创建联邦学习任务] -->|选择算法| B[配置参与方<br/>Alice + Bob]
+        B -->|上传特征配置| C[设置超参数<br/>learning_rate, epochs]
+        C -->|提交任务| D[secretpad-web Controller]
+        D -->|验证参数| E[secretpad-service Service]
+        E -->|生成TaskID| F[(本地DB保存任务)]
+    end
+    
+    subgraph "阶段2: 任务调度 Task Scheduling"
+        F -->|异步调度| G[secretpad-scheduled<br/>Quartz定时器]
+        G -->|查询可用节点| H[Kuscia API Client]
+        H -->|gRPC调用| I[Kuscia Master<br/>Scheduler]
+        I -->|资源分配| J[Domain Alice<br/>Initiator节点]
+        I -->|资源分配| K[Domain Bob<br/>Participant节点]
+    end
+    
+    subgraph "阶段3: 数据准备 Data Preparation"
+        J -->|读取DataRef| L[Alice DataMesh<br/>获取本地数据]
+        K -->|读取DataRef| M[Bob DataMesh<br/>获取本地数据]
+        L -->|数据预处理| N[特征工程<br/>归一化/缺失值处理]
+        M -->|数据预处理| O[特征工程<br/>归一化/缺失值处理]
+    end
+    
+    subgraph "阶段4: SecretFlow组件启动"
+        N -->|启动Ray集群| P[SecretFlow Runtime<br/>Alice侧Worker]
+        O -->|启动Ray集群| Q[SecretFlow Runtime<br/>Bob侧Worker]
+        P -->|建立安全通道| R[SPU安全计算引擎<br/>基于MPC协议]
+        Q -->|建立安全通道| R
+    end
+    
+    subgraph "阶段5: 联邦训练 Federated Training"
+        R -->|初始化模型| S[纵向LR模型<br/>initiator端]
+        S -->|前向传播| T[加密梯度计算<br/>Paillier同态加密]
+        T -->|交换加密梯度| U[跨域梯度聚合<br/>Alice ↔ Bob]
+        U -->|反向传播| V[参数更新<br/>SGD优化器]
+        V -->|检查收敛| W{是否达到<br/>epochs?}
+        W -->|否| T
+        W -->|是| X[训练完成]
+    end
+    
+    subgraph "阶段6: 模型评估 Model Evaluation"
+        X -->|预测测试集| Y[生成预测结果<br/>encrypted predictions]
+        Y -->|解密评估| Z[计算指标<br/>AUC/Accuracy/F1]
+        Z -->|保存模型| AA[模型持久化<br/>OSS/本地存储]
+    end
+    
+    subgraph "阶段7: 结果返回 Result Delivery"
+        AA -->|更新任务状态| AB[secretpad-service]
+        AB -->|写入数据库| AC[(SecretPad DB)]
+        AC -->|WebSocket推送| AD[前端实时通知]
+        AD -->|刷新页面| AE[展示训练结果<br/>模型+评估指标]
+    end
+    
+    style A fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style D fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style E fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style G fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style I fill:#e8f5e9,stroke:#388e3c,stroke-width:3px
+    style J fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style K fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style L fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+    style M fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+    style P fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    style Q fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    style R fill:#fff9c4,stroke:#fbc02d,stroke-width:3px
+    style T fill:#ffebee,stroke:#c62828,stroke-width:2px
+    style U fill:#ffebee,stroke:#c62828,stroke-width:3px
+    style W fill:#e1bee7,stroke:#8e24aa,stroke-width:2px
+    style AA fill:#e8eaf6,stroke:#3949ab,stroke-width:2px
+    style AC fill:#fff9c4,stroke:#fbc02d,stroke-width:2px
+    style AE fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+        </div>
+        
+        <div class="legend">
+            <h3>图例说明</h3>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #e3f2fd; border-color: #1976d2;"></div>
+                <span><strong>前端层</strong>：React + TypeScript用户界面</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #f3e5f5; border-color: #7b1fa2;"></div>
+                <span><strong>后端服务</strong>：Spring Boot应用（web/service/scheduled）</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #fff3e0; border-color: #f57c00;"></div>
+                <span><strong>任务调度</strong>：Quartz定时任务调度器</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #e8f5e9; border-color: #388e3c;"></div>
+                <span><strong>Kuscia调度</strong>：Master节点资源分配</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #fce4ec; border-color: #c2185b;"></div>
+                <span><strong>参与方节点</strong>：Alice/Bob Domain（Initiator/Participant）</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #e0f2f1; border-color: #00796b;"></div>
+                <span><strong>DataMesh</strong>：分布式数据访问层</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #f1f8e9; border-color: #689f38;"></div>
+                <span><strong>SecretFlow</strong>：隐私计算运行时环境</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #fff9c4; border-color: #fbc02d;"></div>
+                <span><strong>安全引擎</strong>：SPU（Secure Processing Unit）基于MPC</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ffebee; border-color: #c62828;"></div>
+                <span><strong>加密计算</strong>：同态加密梯度交换</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #e8eaf6; border-color: #3949ab;"></div>
+                <span><strong>模型存储</strong>：OSS或本地文件系统</span>
+            </div>
+        </div>
+        
+        <div class="workflow-steps">
+            <h3>核心工作流程详解</h3>
+            
+            <div class="step-detail">
+                <h4 style="color: #1565c0; margin-top: 0;">步骤1-2: 任务创建与调度</h4>
+                <ul style="line-height: 1.8;">
+                    <li>用户在前端选择算法类型（如纵向逻辑回归VLR）</li>
+                    <li>配置参与方：指定Initiator（如Alice）和Participant（如Bob）</li>
+                    <li>设置超参数：学习率、迭代次数、批量大小等</li>
+                    <li>secretpad-scheduled通过Quartz触发任务执行</li>
+                    <li>Kuscia Master根据节点资源情况分配计算任务</li>
+                </ul>
+            </div>
+            
+            <div class="step-detail">
+                <h4 style="color: #1565c0; margin-top: 0;">步骤3-4: 数据准备与Runtime启动</h4>
+                <ul style="line-height: 1.8;">
+                    <li>各参与方通过DataMesh的DataRef读取本地数据（不共享原始数据）</li>
+                    <li>执行数据预处理：特征归一化、缺失值填充、异常值处理</li>
+                    <li>SecretFlow Runtime在各方节点启动Ray分布式计算集群</li>
+                    <li>建立SPU安全通道，基于MPC（多方安全计算）协议</li>
+                </ul>
+            </div>
+            
+            <div class="step-detail">
+                <h4 style="color: #1565c0; margin-top: 0;">步骤5: 联邦训练核心流程</h4>
+                <ul style="line-height: 1.8;">
+                    <li><strong>前向传播</strong>：Initiator端计算局部损失，使用Paillier同态加密</li>
+                    <li><strong>梯度交换</strong>：各方交换加密后的梯度信息，明文不可见</li>
+                    <li><strong>梯度聚合</strong>：在密文状态下完成梯度累加</li>
+                    <li><strong>反向传播</strong>：使用SGD/Adam优化器更新模型参数</li>
+                    <li><strong>收敛检查</strong>：判断是否达到最大迭代次数或损失阈值</li>
+                    <li>整个过程中，原始数据始终保留在本地，仅交换加密梯度</li>
+                </ul>
+            </div>
+            
+            <div class="step-detail">
+                <h4 style="color: #1565c0; margin-top: 0;">步骤6-7: 模型评估与结果交付</h4>
+                <ul style="line-height: 1.8;">
+                    <li>使用测试集生成加密预测结果</li>
+                    <li>Initiator端解密并计算评估指标（AUC、Accuracy、F1-Score）</li>
+                    <li>模型文件保存到OSS或本地存储，生成ModelRef</li>
+                    <li>通过WebSocket实时推送训练进度和最终结果到前端</li>
+                    <li>前端展示可视化图表：损失曲线、ROC曲线、混淆矩阵等</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 20px; background-color: #e8f5e9; border-radius: 5px;">
+            <h3 style="color: #2e7d32; margin-top: 0;">关键技术点</h3>
+            <table style="width: 100%; border-collapse: collapse; line-height: 1.8;">
+                <tr style="background-color: #c8e6c9;">
+                    <th style="padding: 10px; border: 1px solid #a5d6a7; text-align: left;">技术组件</th>
+                    <th style="padding: 10px; border: 1px solid #a5d6a7; text-align: left;">作用</th>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;"><strong>Kuscia</strong></td>
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;">隐私计算编排框架，负责任务调度和资源管理</td>
+                </tr>
+                <tr style="background-color: #f1f8e9;">
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;"><strong>DataMesh</strong></td>
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;">分布式数据网格，提供统一的数据访问接口（DataRef）</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;"><strong>SecretFlow</strong></td>
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;">蚂蚁集团开源的隐私计算框架，支持多种联邦学习算法</td>
+                </tr>
+                <tr style="background-color: #f1f8e9;">
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;"><strong>SPU</strong></td>
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;">安全处理单元，基于MPC实现密文计算</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;"><strong>Paillier加密</strong></td>
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;">同态加密算法，支持密文加法运算</td>
+                </tr>
+                <tr style="background-color: #f1f8e9;">
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;"><strong>Ray</strong></td>
+                    <td style="padding: 10px; border: 1px solid #a5d6a7;">分布式计算框架，支撑大规模并行训练</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>
