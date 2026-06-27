@@ -66,7 +66,7 @@ function do_http_probe() {
 	local retry=0
 	while [ $retry -lt "$max_retry" ]; do
 		local status_code
-		status_code=$(docker exec -it "$ctr" curl -k --write-out '%{http_code}' --silent --output /dev/null "${endpoint}")
+		status_code=$(docker exec -i "$ctr" curl -k --write-out '%{http_code}' --silent --output /dev/null "${endpoint}")
 		if [[ $status_code -eq 200 || $status_code -eq 404 || $status_code -eq 401 ]]; then
 			return 0
 		fi
@@ -378,7 +378,7 @@ function init_tee() {
 	docker run --rm --entrypoint /bin/bash -v $(pwd):/tmp/secretpad "$SECRETPAD_IMAGE" -c 'cp -R /app/scripts/templates/tee-image.yaml /tmp/secretpad/'
 	# shellcheck disable=SC2046
 	docker run --rm --entrypoint /bin/bash -v $(pwd):/tmp/secretpad "$SECRETPAD_IMAGE" -c 'cp -R /app/scripts/templates/tee-capsule-manager.yaml /tmp/secretpad/'
-	TEE_NODE_NAME=$(docker exec -it "${USER}"-kuscia-master kubectl get nodes | grep tee | awk '{print $1}')
+	TEE_NODE_NAME=$(docker exec -i "${USER}"-kuscia-master kubectl get nodes | grep tee | awk '{print $1}')
 	sed "s|{{.TEE_NODE_NAME}}|${TEE_NODE_NAME}|g;
   s|{{.TEE_CAPSULE_MANAGER_SIM_IMAGE}}|${CAPSULE_MANAGER_SIM_IMAGE}|g" \
 		tee-capsule-manager.yaml >tee-capsule-manager-0.yaml
@@ -403,12 +403,12 @@ function init_tee() {
 
 	log "create tee appImage"
 	docker cp tee-image-0.yaml "${KUSCIA_MASTER_CTR}":/home/kuscia
-	docker exec -it "${KUSCIA_MASTER_CTR}" kubectl apply -f tee-image-0.yaml
+	docker exec -i "${KUSCIA_MASTER_CTR}" kubectl apply -f tee-image-0.yaml
 
 	log "create tee capsule deploy"
 	docker cp tee-capsule-manager-0.yaml "${KUSCIA_MASTER_CTR}":/home/kuscia
-	docker exec -it "${KUSCIA_MASTER_CTR}" kubectl delete -f tee-capsule-manager-0.yaml >/dev/null 2>&1 || true
-	docker exec -it "${KUSCIA_MASTER_CTR}" kubectl apply -f tee-capsule-manager-0.yaml
+	docker exec -i "${KUSCIA_MASTER_CTR}" kubectl delete -f tee-capsule-manager-0.yaml >/dev/null 2>&1 || true
+	docker exec -i "${KUSCIA_MASTER_CTR}" kubectl apply -f tee-capsule-manager-0.yaml
 	local alice=${KUSCIA_CTR_PREFIX}-${PAD_LITE}-alice
 	local bob=${KUSCIA_CTR_PREFIX}-${PAD_LITE}-bob
 	local tee=${KUSCIA_CTR_PREFIX}-${PAD_LITE}-tee
@@ -417,13 +417,13 @@ function init_tee() {
 		protocol="https"
 	fi
 	log "create domain route: alice -> tee"
-	docker exec -it "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh alice tee ${protocol}://"${tee}":1080
+	docker exec -i "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh alice tee ${protocol}://"${tee}":1080
 	log "create domain route: tee -> alice"
-	docker exec -it "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh tee alice ${protocol}://"${alice}":1080
+	docker exec -i "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh tee alice ${protocol}://"${alice}":1080
 	log "create domain route: bob -> tee"
-	docker exec -it "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh bob tee ${protocol}://"${tee}":1080
+	docker exec -i "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh bob tee ${protocol}://"${tee}":1080
 	log "create domain route: tee -> bob"
-	docker exec -it "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh tee bob ${protocol}://"${bob}":1080
+	docker exec -i "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh tee bob ${protocol}://"${bob}":1080
 	log "end init tee crd"
 }
 
@@ -448,8 +448,8 @@ function applySfServingAppImage() {
 		sf-serving.yaml >sf-serving-0.yaml
 	log "docker cp sf-serving.yaml  $container_id:/home/kuscia"
 	docker cp sf-serving-0.yaml "$container_id":/home/kuscia
-	log "docker exec -it $container_id kubectl apply -f sf-serving.yam"
-	docker exec -it "$container_id" kubectl apply -f sf-serving-0.yaml
+	log "docker exec -i $container_id kubectl apply -f sf-serving.yam"
+	docker exec -i "$container_id" kubectl apply -f sf-serving-0.yaml
 }
 
 function applySfScqlAppImage() {
@@ -477,8 +477,8 @@ function applySfScqlAppImage() {
 		sf-scql.yaml >sf-scql-0.yaml
 	log "docker cp sf-scql.yaml  $container_id:/home/kuscia"
 	docker cp sf-scql-0.yaml "$container_id":/home/kuscia
-	log "docker exec -it $container_id kubectl apply -f sf-scql.yam"
-	docker exec -it "$container_id" kubectl apply -f sf-scql-0.yaml
+	log "docker exec -i $container_id kubectl apply -f sf-scql.yam"
+	docker exec -i "$container_id" kubectl apply -f sf-scql-0.yaml
 }
 
 function create_alice_bob_domain_route() {
@@ -489,9 +489,9 @@ function create_alice_bob_domain_route() {
 		protocol="https"
 	fi
 	log "create domain route: alice -> bob"
-	docker exec -it "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh alice bob ${protocol}://"${bob}":1080
+	docker exec -i "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh alice bob ${protocol}://"${bob}":1080
 	log "create domain route: bob -> alice"
-	docker exec -it "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh bob alice ${protocol}://"${alice}":1080
+	docker exec -i "${KUSCIA_MASTER_CTR}" sh scripts/deploy/create_cluster_domain_route.sh bob alice ${protocol}://"${alice}":1080
 }
 
 function init_kuscia_config() {
@@ -517,20 +517,20 @@ function init_kuscia_config() {
 	fi
 	log "kuscia init kuscia.yaml ${kuscia_config_file}"
 	if is_master; then
-		docker run -it --rm "${KUSCIA_IMAGE}" kuscia init --mode master --domain "${KUSCIA_MASTER_NODE_ID}" --protocol "${KUSCIA_PROTOCOL}" >"${kuscia_config_file}"
+		docker run -i --rm "${KUSCIA_IMAGE}" kuscia init --mode master --domain "${KUSCIA_MASTER_NODE_ID}" --protocol "${KUSCIA_PROTOCOL}" >"${kuscia_config_file}"
 	fi
 	if is_lite; then
 		# shellcheck disable=SC2155
 		if is_alice_lite || is_bob_lite || is_tee_lite; then
-			export KUSCIA_TOKEN=$(docker exec -it "${KUSCIA_MASTER_CTR}" scripts/deploy/add_domain_lite.sh "${NODE_ID}" "${KUSCIA_MASTER_NODE_ID}" | tr -d '\r\n')
+			export KUSCIA_TOKEN=$(docker exec -i "${KUSCIA_MASTER_CTR}" scripts/deploy/add_domain_lite.sh "${NODE_ID}" "${KUSCIA_MASTER_NODE_ID}" | tr -d '\r\n')
 		fi
-		docker run -it --rm "${KUSCIA_IMAGE}" kuscia init --mode lite --domain "${NODE_ID}" --master-endpoint "${KUSCIA_MASTER_ENDPOINT}" --lite-deploy-token "${KUSCIA_TOKEN}" --protocol "${KUSCIA_PROTOCOL}" >"${kuscia_config_file}"
+		docker run -i --rm "${KUSCIA_IMAGE}" kuscia init --mode lite --domain "${NODE_ID}" --master-endpoint "${KUSCIA_MASTER_ENDPOINT}" --lite-deploy-token "${KUSCIA_TOKEN}" --protocol "${KUSCIA_PROTOCOL}" >"${kuscia_config_file}"
 	fi
 	if is_p2p; then
-		docker run -it --rm "${KUSCIA_IMAGE}" kuscia init --mode autonomy --domain "${NODE_ID}" --protocol "${KUSCIA_PROTOCOL}" >"${kuscia_config_file}"
+		docker run -i --rm "${KUSCIA_IMAGE}" kuscia init --mode autonomy --domain "${NODE_ID}" --protocol "${KUSCIA_PROTOCOL}" >"${kuscia_config_file}"
 	fi
 	if is_p2p_node; then
-		docker run -it --rm "${KUSCIA_IMAGE}" kuscia init --mode autonomy --domain "${NODE_ID}" --protocol "${KUSCIA_PROTOCOL}" >"${kuscia_config_file}"
+		docker run -i --rm "${KUSCIA_IMAGE}" kuscia init --mode autonomy --domain "${NODE_ID}" --protocol "${KUSCIA_PROTOCOL}" >"${kuscia_config_file}"
 	fi
 	if [ -n "$domainKeyData" ]; then
 		echo "domainKeyData is not empty, cover kuscia.yaml"

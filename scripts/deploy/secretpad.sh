@@ -24,13 +24,13 @@ source "$PAD_DIR/common/secretpad.env"
 function generate_secretpad_serverkey() {
 	local tmp_volume=$1
 	local password=$2
-	docker run -it --rm --entrypoint /bin/bash --volume="${tmp_volume}"/config/:/tmp/temp "${SECRETPAD_IMAGE}" -c "scripts/cert/gen_secretpad_serverkey.sh ${password} /tmp/temp"
+	docker run -i --rm --entrypoint /bin/bash --volume="${tmp_volume}"/config/:/tmp/temp "${SECRETPAD_IMAGE}" -c "scripts/cert/gen_secretpad_serverkey.sh ${password} /tmp/temp"
 	rm -rf "${tmp_volume}"/server.jks
 	log "generate webserver server key done"
 }
 
 function init_secretpad_db() {
-	docker run -it --rm --entrypoint /bin/bash --volume="${volume_path}"/db:/app/db -e SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE}" "${SECRETPAD_IMAGE}" -c "scripts/sql/update-sql.sh"
+	docker run -i --rm --entrypoint /bin/bash --volume="${volume_path}"/db:/app/db -e SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE}" "${SECRETPAD_IMAGE}" -c "scripts/sql/update-sql.sh"
 	log "initialize ${SPRING_PROFILES_ACTIVE}  webserver database done "
 }
 
@@ -39,7 +39,7 @@ function create_secretpad_user_password() {
 	local volume_path=$1
 	local user_name=$2
 	local password=$3
-	docker run -it --rm --entrypoint /bin/bash --volume="${volume_path}"/db:/app/db "${SECRETPAD_IMAGE}" -c "scripts/user/register_account.sh -n '${user_name}' -p '${password}' -t '${SPRING_PROFILES_ACTIVE}' -o '${NODE_ID}'"
+	docker run -i --rm --entrypoint /bin/bash --volume="${volume_path}"/db:/app/db "${SECRETPAD_IMAGE}" -c "scripts/user/register_account.sh -n '${user_name}' -p '${password}' -t '${SPRING_PROFILES_ACTIVE}' -o '${NODE_ID}'"
 	log "create webserver user and password done"
 }
 
@@ -285,7 +285,7 @@ function create_secretpad_svc() {
 			ctr=${KUSCIA_MASTER_CTR}
 			domain_id=${KUSCIA_MASTER_NODE_ID}
 		fi
-		docker exec -it "${ctr}" scripts/deploy/create_secretpad_svc.sh "${secretpad_ctr}" "${domain_id}"
+		docker exec -i "${ctr}" scripts/deploy/create_secretpad_svc.sh "${secretpad_ctr}" "${domain_id}"
 	fi
 }
 
@@ -332,7 +332,7 @@ function start() {
 		log "render secretpad config ..."
 		render_secretpad_config "${volume_path}" ${secretpad_key_pass}
 		# run secretpad
-		docker run -itd --init --name="${PAD_CTR}" --restart=always --network="${NETWORK_NAME}" -m "$LITE_MEMORY_LIMIT" \
+		docker run -id --init --name="${PAD_CTR}" --restart=always --network="${NETWORK_NAME}" -m "$LITE_MEMORY_LIMIT" \
 			--volume="${PAD_INSTALL_DIR}":/app/data \
 			--volume="${volume_path}"/log:/app/log \
 			--volume="${volume_path}"/config:/app/config \
