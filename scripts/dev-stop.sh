@@ -18,23 +18,24 @@ is_alive() {
 }
 
 stop_pidfile() {
-    local pidfile="$1" name="$2"
+    local pidfile="$1"
+    local name="$2"
     if [ -f "$pidfile" ]; then
         local pid
         pid="$(cat "$pidfile")"
         if is_alive "$pid"; then
-            echo "停止 $name（pid $pid）..."
+            echo "停止 ${name}（pid ${pid}）..."
             kill "$pid" 2>/dev/null || true
             sleep 1
             if is_alive "$pid"; then
                 kill -9 "$pid" 2>/dev/null || true
             fi
         else
-            echo "$name 未在运行"
+            echo "${name} 未在运行"
         fi
         rm -f "$pidfile"
     else
-        echo "未找到 $name 的 pid 文件"
+        echo "未找到 ${name} 的 pid 文件"
     fi
 }
 
