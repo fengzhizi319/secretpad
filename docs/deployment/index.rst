@@ -12,3 +12,4 @@
     autonomy
     nginx_integration
     log
+    secretpad_kuscia_datamesh_secretflow_flow
