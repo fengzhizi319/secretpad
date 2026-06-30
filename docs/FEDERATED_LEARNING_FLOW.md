@@ -21,8 +21,8 @@ Frontend (React/AntD) -> Secretpad Backend (Spring Boot) -> Kuscia (Go) -> DataM
   5. 提交联邦学习任务
 
 #### 2.1.2 前端API调用
-- 前端位于：[/Users/charles/Documents/code/workspace/secretpad/frontend-src/apps/platform/src](file:///Users/charles/Documents/code/workspace/secretpad/frontend-src/apps/platform/src)
-- API服务调用位于：[/Users/charles/Documents/code/workspace/secretpad/frontend-src/apps/platform/src/services/secretpad](file:///Users/charles/Documents/code/workspace/secretpad/frontend-src/apps/platform/src/services/secretpad)
+- 前端位于：[/secretpad/frontend-src/apps/platform/src](file:///secretpad/frontend-src/apps/platform/src)
+- API服务调用位于：[/secretpad/frontend-src/apps/platform/src/services/secretpad](file:///secretpad/frontend-src/apps/platform/src/services/secretpad)
 - 前端通过HTTP/HTTPS向后端发起REST API请求，主要包括：
   - `/api/v1alpha1/datamesh/domaindatasource` - 创建数据源
   - `/api/v1alpha1/datamesh/domaindata` - 创建数据表
@@ -32,26 +32,26 @@ Frontend (React/AntD) -> Secretpad Backend (Spring Boot) -> Kuscia (Go) -> DataM
 
 #### 2.2.1 后端架构
 - 项目结构：
-  - [secretpad-web](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-web) - Web API层
-  - [secretpad-service](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-service) - 业务逻辑层
-  - [secretpad-persistence](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-persistence) - 数据持久化层
-  - [secretpad-common](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-common) - 通用工具类
+  - [secretpad-web](file:///secretpad/secretpad-web) - Web API层
+  - [secretpad-service](file:///secretpad/secretpad-service) - 业务逻辑层
+  - [secretpad-persistence](file:///secretpad/secretpad-persistence) - 数据持久化层
+  - [secretpad-common](file:///secretpad/secretpad-common) - 通用工具类
 
 #### 2.2.2 API控制器
-- 后端API控制器位于：[/Users/charles/Documents/code/workspace/secretpad/secretpad-web/src/main/java/org/secretflow/secretpad/web](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-web/src/main/java/org/secretflow/secretpad/web)
+- 后端API控制器位于：[/secretpad/secretpad-web/src/main/java/org/secretflow/secretpad/web](file:///secretpad/secretpad-web/src/main/java/org/secretflow/secretpad/web)
 - 主要控制器：
-  - [DatameshController.java](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-web/src/main/java/org/secretflow/secretpad/web/controller/v1alpha1/datamesh/DatameshController.java) - 处理数据网格相关请求
-  - [JobController.java](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-web/src/main/java/org/secretflow/secretpad/web/controller/v1alpha1/job/JobController.java) - 处理任务相关请求
+  - [DatameshController.java](file:///secretpad/secretpad-web/src/main/java/org/secretflow/secretpad/web/controller/v1alpha1/datamesh/DatameshController.java) - 处理数据网格相关请求
+  - [JobController.java](file:///secretpad/secretpad-web/src/main/java/org/secretflow/secretpad/web/controller/v1alpha1/job/JobController.java) - 处理任务相关请求
 
 #### 2.2.3 业务逻辑层
-- 业务逻辑位于：[/Users/charles/Documents/code/workspace/secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service)
+- 业务逻辑位于：[/secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service](file:///secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service)
 - 关键服务：
-  - [DatameshService.java](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service/datamesh/DatameshService.java) - 数据网格服务
-  - [JobService.java](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service/job/JobService.java) - 任务服务
+  - [DatameshService.java](file:///secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service/datamesh/DatameshService.java) - 数据网格服务
+  - [JobService.java](file:///secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service/job/JobService.java) - 任务服务
 
 #### 2.2.4 与Kuscia的交互
 - 后端通过Kuscia API与Kuscia进行交互
-- 使用Kuscia提供的客户端库：[client-java-kusciaapi](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-api/client-java-kusciaapi)
+- 使用Kuscia提供的客户端库：[client-java-kusciaapi](file:///secretpad/secretpad-api/client-java-kusciaapi)
 - 主要交互包括：
   - 创建DomainDataSource资源
   - 创建DomainData资源
@@ -60,7 +60,7 @@ Frontend (React/AntD) -> Secretpad Backend (Spring Boot) -> Kuscia (Go) -> DataM
 ### 2.3 Kuscia处理流程
 
 #### 2.3.1 Kuscia架构
-- 项目路径：[/Users/charles/Documents/code/workspace/kuscia](file:///Users/charles/Documents/code/workspace/kuscia)
+- 项目路径：[/kuscia](file:///kuscia)
 - 核心组件：
   - Agent - 节点代理
   - DataMesh - 数据网格服务
@@ -69,17 +69,17 @@ Frontend (React/AntD) -> Secretpad Backend (Spring Boot) -> Kuscia (Go) -> DataM
 
 #### 2.3.2 自定义资源定义(CRD)
 - Kuscia定义了多种CRD资源：
-  - [KusciaJob](file:///Users/charles/Documents/code/workspace/kuscia/pkg/crd/apis/kuscia/v1alpha1/kusciajob_types.go) - 联邦学习任务定义
-  - [KusciaTask](file:///Users/charles/Documents/code/workspace/kuscia/pkg/crd/apis/kuscia/v1alpha1/kusciatask_types.go) - 任务实例定义
-  - [DomainData](file:///Users/charles/Documents/code/workspace/kuscia/pkg/crd/apis/kuscia/v1alpha1/domaindata_types.go) - 数据表定义
-  - [DomainDataSource](file:///Users/charles/Documents/code/workspace/kuscia/pkg/crd/apis/kuscia/v1alpha1/domaindatasource_types.go) - 数据源定义
+  - [KusciaJob](file:///kuscia/pkg/crd/apis/kuscia/v1alpha1/kusciajob_types.go) - 联邦学习任务定义
+  - [KusciaTask](file:///kuscia/pkg/crd/apis/kuscia/v1alpha1/kusciatask_types.go) - 任务实例定义
+  - [DomainData](file:///kuscia/pkg/crd/apis/kuscia/v1alpha1/domaindata_types.go) - 数据表定义
+  - [DomainDataSource](file:///kuscia/pkg/crd/apis/kuscia/v1alpha1/domaindatasource_types.go) - 数据源定义
 
 #### 2.3.3 DataMesh组件
-- DataMesh路径：[/Users/charles/Documents/code/workspace/kuscia/pkg/datamesh](file:///Users/charles/Documents/code/workspace/kuscia/pkg/datamesh)
+- DataMesh路径：[/kuscia/pkg/datamesh](file:///kuscia/pkg/datamesh)
 - 核心服务：
-  - [domaindata.go](file:///Users/charles/Documents/code/workspace/kuscia/pkg/datamesh/metaserver/service/domaindata.go) - 数据管理服务
-  - [domaindatasource.go](file:///Users/charles/Documents/code/workspace/kuscia/pkg/datamesh/metaserver/service/domaindatasource.go) - 数据源管理服务
-  - [operator.go](file:///Users/charles/Documents/code/workspace/kuscia/pkg/datamesh/metaserver/service/operator.go) - 操作符服务
+  - [domaindata.go](file:///kuscia/pkg/datamesh/metaserver/service/domaindata.go) - 数据管理服务
+  - [domaindatasource.go](file:///kuscia/pkg/datamesh/metaserver/service/domaindatasource.go) - 数据源管理服务
+  - [operator.go](file:///kuscia/pkg/datamesh/metaserver/service/operator.go) - 操作符服务
 
 #### 2.3.4 任务调度流程
 1. Secretpad后端创建KusciaJob CRD
@@ -90,11 +90,11 @@ Frontend (React/AntD) -> Secretpad Backend (Spring Boot) -> Kuscia (Go) -> DataM
 ### 2.4 SecretFlow集成
 
 #### 2.4.1 SecretFlow与Kuscia集成
-- 集成代码路径：[/Users/charles/Documents/code/workspace/secretflow/secretflow/kuscia](file:///Users/charles/Documents/code/workspace/secretflow/secretflow/kuscia)
+- 集成代码路径：[/secretflow/secretflow/kuscia](file:///secretflow/secretflow/kuscia)
 - 主要组件：
-  - [entry.py](file:///Users/charles/Documents/code/workspace/secretflow/secretflow/kuscia/entry.py) - 入口点
-  - [task_config.py](file:///Users/charles/Documents/code/workspace/secretflow/secretflow/kuscia/task_config.py) - 任务配置
-  - [datamesh.py](file:///Users/charles/Documents/code/workspace/secretflow/secretflow/kuscia/datamesh.py) - 数据网格集成
+  - [entry.py](file:///secretflow/secretflow/kuscia/entry.py) - 入口点
+  - [task_config.py](file:///secretflow/secretflow/kuscia/task_config.py) - 任务配置
+  - [datamesh.py](file:///secretflow/secretflow/kuscia/datamesh.py) - 数据网格集成
 
 #### 2.4.2 任务执行流程
 1. Kuscia Task Controller启动SecretFlow容器
@@ -106,14 +106,14 @@ Frontend (React/AntD) -> Secretpad Backend (Spring Boot) -> Kuscia (Go) -> DataM
 
 #### 2.4.3 通信协议
 - 使用gRPC进行组件间通信
-- DataMesh提供gRPC接口：[domaindata.proto](file:///Users/charles/Documents/code/workspace/kuscia/proto/api/v1alpha1/datamesh/domaindata.proto)
-- KusciaTask使用gRPC接口：[kuscia_task.proto](file:///Users/charles/Documents/code/workspace/kuscia/proto/api/v1alpha1/kusciatask/kuscia_task.proto)
+- DataMesh提供gRPC接口：[domaindata.proto](file:///kuscia/proto/api/v1alpha1/datamesh/domaindata.proto)
+- KusciaTask使用gRPC接口：[kuscia_task.proto](file:///kuscia/proto/api/v1alpha1/kusciatask/kuscia_task.proto)
 
 ### 2.5 端到端时序图
 
 #### 2.5.1 数据源和数据资产创建时序
 
-``mermaid
+```mermaid
 sequenceDiagram
   participant U as 用户
   participant FE as SecretPad 前端
@@ -153,7 +153,7 @@ sequenceDiagram
 
 #### 2.5.2 联邦学习任务提交和执行时序
 
-``mermaid
+```mermaid
 sequenceDiagram
   participant U as 用户
   participant FE as SecretPad 前端
@@ -252,7 +252,7 @@ class KusciaTaskConfig:
 
   #### 3.3.1 创建数据源请求 CreateDatasourceRequest
 
-  对应 SecretPad 后端接口 `/api/v1alpha1/datasource/create`，模型在 [CreateDatasourceRequest.java](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service/model/datasource/CreateDatasourceRequest.java)。
+  对应 SecretPad 后端接口 `/api/v1alpha1/datasource/create`，模型在 [CreateDatasourceRequest.java](file:///secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service/model/datasource/CreateDatasourceRequest.java)。
 
   | 字段 | 类型 | 含义 | 去向 |
   |---|---|---|---|
@@ -357,7 +357,7 @@ class KusciaTaskConfig:
 
   #### 3.3.10 StartGraphRequest
 
-  对应 `/api/v1alpha1/graph/start`，模型在 [StartGraphRequest.java](file:///Users/charles/Documents/code/workspace/secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service/model/graph/StartGraphRequest.java)。
+  对应 `/api/v1alpha1/graph/start`，模型在 [StartGraphRequest.java](file:///secretpad/secretpad-service/src/main/java/org/secretflow/secretpad/service/model/graph/StartGraphRequest.java)。
 
   | 字段 | 类型 | 含义 |
   |---|---|---|

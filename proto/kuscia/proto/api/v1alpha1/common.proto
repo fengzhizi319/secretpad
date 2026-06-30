@@ -21,8 +21,227 @@ import "google/protobuf/any.proto";
 option go_package = "github.com/secretflow/kuscia/proto/api/v1alpha1";
 option java_package = "org.secretflow.v1alpha1.common";
 
+// ============================================================================
+// RequestHeader - 请求头消息定义
+// ============================================================================
+// 
+// 【功能说明】
+// RequestHeader 是 Kuscia API 中用于携带自定义元数据的通用消息类型。
+// 它类似于 HTTP 协议中的 Header，但是嵌入在 Protobuf 消息中的应用层元数据。
+// 
+// 【使用场景】
+// 1. 分布式追踪：传递 Trace ID、Span ID 等链路追踪信息
+// 2. 多租户隔离：传递 Tenant ID，实现租户级别的数据隔离
+// 3. 审计日志：记录操作用户、操作时间、来源 IP 等审计信息
+// 4. 版本控制：指定 API 版本，支持灰度发布和向后兼容
+// 5. 国际化：传递语言偏好（如 zh-CN、en-US）
+// 6. 自定义业务数据：传递业务相关的元数据标签
+// 
+// 【设计原则】
+// - 灵活性：使用 map<string, string> 结构，可以携带任意键值对
+// - 扩展性：新增字段无需修改 Proto 定义，直接添加新的 key-value
+// - 通用性：所有 RPC 请求都可以使用，统一元数据传递方式
+// - 轻量级：只包含一个 map 字段，开销很小
+// 
+// 【与其他 Header 的区别】
+// 1. HTTP/2 Header（传输层）
+//    - 位置：HTTP/2 HEADERS frame
+//    - 用途：协议级别的元数据（如 :method、:path、content-type）
+//    - 示例：authorization: Bearer token123
+// 
+// 2. gRPC Metadata（框架层）
+//    - 位置：gRPC 拦截器中添加
+//    - 用途：gRPC 框架级别的元数据
+//    - 示例：io.grpc.Metadata.of("authorization", "Bearer token123")
+// 
+// 3. RequestHeader（应用层）⭐ 本消息
+//    - 位置：嵌入在 Protobuf 请求消息中
+//    - 用途：业务级别的自定义元数据
+//    - 示例：request.header.custom_headers["X-Trace-ID"] = "trace-123"
+// 
+// 三者可以共存，互不影响。RequestHeader 的优势是：
+// - 类型安全：编译时检查
+// - 文档化：在 Proto 文件中明确定义
+// - 序列化：随请求消息一起序列化和反序列化
+// 
+// 【Java 使用示例】
+// <pre>{@code
+// // 1. 创建 RequestHeader
+// RequestHeader header = RequestHeader.newBuilder()
+//     .putCustomHeaders("X-Trace-ID", UUID.randomUUID().toString())
+//     .putCustomHeaders("X-Tenant-ID", "tenant-001")
+//     .putCustomHeaders("X-User-ID", "admin")
+//     .putCustomHeaders("X-Request-Time", Instant.now().toString())
+//     .build();
+// 
+// // 2. 在请求中使用
+// CreateDomainRequest request = CreateDomainRequest.newBuilder()
+//     .setHeader(header)
+//     .setDomainId("alice")
+//     .setRole("partner")
+//     .build();
+// 
+// // 3. 服务端提取信息
+// String traceId = request.getHeader().getCustomHeadersMap()
+//     .getOrDefault("X-Trace-ID", "unknown");
+// log.info("Processing request with trace ID: {}", traceId);
+// }</pre>
+// 
+// 【Go 使用示例】
+// <pre>{@code
+// header := &v1alpha1.RequestHeader{
+//     CustomHeaders: map[string]string{
+//         "X-Trace-ID":  uuid.New().String(),
+//         "X-Tenant-ID": "tenant-001",
+//         "X-User-ID":   "admin",
+//     },
+// }
+// 
+// request := &v1alpha1.CreateDomainRequest{
+//     Header:   header,
+//     DomainId: "alice",
+//     Role:     "partner",
+// }
+// }</pre>
+// 
+// 【命名规范】
+// 建议的自定义 Header 命名约定：
+// - X-Trace-ID: 分布式追踪 ID
+// - X-Span-ID: 跨度 ID
+// - X-Tenant-ID: 租户 ID
+// - X-User-ID: 用户 ID
+// - X-Request-ID: 请求唯一标识
+// - X-Correlation-ID: 关联 ID
+// - X-API-Version: API 版本
+// - X-Client-Version: 客户端版本
+// - X-Language: 语言偏好（zh-CN, en-US）
+// - X-Request-Time: 请求时间（ISO 8601）
+// - X-Source-IP: 来源 IP
+// - X-Idempotency-Key: 幂等性键（防止重复提交）
+// 
+// 【最佳实践】
+// 1. 使用前缀：自定义字段使用 "X-" 前缀，避免与标准字段冲突
+// 2. 大写字母：键名使用大写字母和连字符（如 X-USER-ID）
+// 3. 避免敏感：不要在 header 中传递密码、密钥、token 等敏感信息
+// 4. 保持简洁：只传递必要的元数据，总大小建议 < 8KB
+// 5. UTF-8 编码：所有字符串必须是有效的 UTF-8 编码
+// 6. 时间格式：使用 ISO 8601 格式（如 2024-01-15T10:30:00Z）
+// 7. ID 格式：使用 UUID 或特定格式的 ID
+// 8. 文档化：在团队内统一 header 字段的含义和格式
+// 9. 向后兼容：新增字段时确保旧版本能正常工作
+// 10. 日志脱敏：记录日志时对敏感字段进行脱敏处理
+// 
+// 【服务端处理建议】
+// Kuscia API 服务端可以使用这些信息进行：
+// - 链路追踪：将 Trace ID 传递到下游服务，实现全链路追踪
+// - 日志关联：在日志中包含 Trace ID，方便问题排查
+// - 权限验证：根据 Tenant ID 进行多租户数据隔离
+// - 审计追踪：记录操作用户、时间等信息到审计日志
+// - 性能监控：统计不同版本 API 的调用量和延迟
+// - 限流控制：根据 User ID 或 Tenant ID 进行速率限制
+// - 灰度发布：根据 API Version 路由到不同版本的服务
+// - 国际化：根据 Language 返回对应语言的响应
+// 
+// 【注意事项】
+// ⚠️ 安全性：
+// - RequestHeader 会被记录到日志中，避免包含敏感信息
+// - 如果需要传递认证信息，建议使用 gRPC Metadata 或 TLS/mTLS
+// - 生产环境建议对 header 进行白名单校验，防止注入攻击
+// 
+// ⚠️ 性能影响：
+// - 每个 key-value 都会增加消息体积，影响序列化/反序列化性能
+// - 建议控制在 10-20 个键值对以内
+// - 总大小建议不超过 8KB
+// 
+// ⚠️ 兼容性：
+// - 旧版本客户端可能不发送 header，服务端需要做好默认值处理
+// - 新版本服务端不应强制要求某些 header 字段（除非必要）
+// - 新增 header 字段时，确保不会影响现有功能
+//
 // RequestHeader carries the user custom headers.
 message RequestHeader {
+  // ========================================================================
+  // 字段 1: custom_headers - 自定义头部（键值对映射）
+  // ========================================================================
+  // 
+  // 【字段类型】
+  // map<string, string> - Protobuf 的映射类型
+  // 
+  // 【语法说明】
+  // map<key_type, value_type> field_name = field_number;
+  // - key_type: 可以是任何整数类型、string，但不能是 floating point 或 bytes
+  // - value_type: 可以是任何类型（包括 message 类型）
+  // - field_number: 字段编号（这里使用 1）
+  // 
+  // 【Java 中的表现】
+  // - 生成方法：getCustomHeadersMap() 返回 Map<String, String>
+  // - 构建方法：putCustomHeaders(key, value) 添加键值对
+  // - 不可变：生成的 Map 是不可变的（ImmutableMap）
+  // 
+  // 【使用示例】
+  // Java:
+  // <pre>{@code
+  // // 构建时添加键值对
+  // RequestHeader header = RequestHeader.newBuilder()
+  //     .putCustomHeaders("X-Trace-ID", "trace-123")
+  //     .putCustomHeaders("X-User-ID", "admin")
+  //     .build();
+  // 
+  // // 读取时获取 Map
+  // Map<String, String> headers = header.getCustomHeadersMap();
+  // String traceId = headers.get("X-Trace-ID");  // "trace-123"
+  // 
+  // // 安全访问（避免 NullPointerException）
+  // String userId = header.getCustomHeadersMap()
+  //     .getOrDefault("X-User-ID", "anonymous");
+  // }</pre>
+  // 
+  // Go:
+  // <pre>{@code
+  // header := &v1alpha1.RequestHeader{
+  //     CustomHeaders: map[string]string{
+  //         "X-Trace-ID": "trace-123",
+  //         "X-User-ID":  "admin",
+  //     },
+  // }
+  // 
+  // traceId := header.CustomHeaders["X-Trace-ID"]  // "trace-123"
+  // }</pre>
+  // 
+  // 【Protobuf 序列化】
+  // map 类型在 Protobuf 中被序列化为 repeated message：
+  // message MapFieldEntry {
+  //   key_type key = 1;
+  //   value_type value = 2;
+  // }
+  // repeated MapFieldEntry custom_headers = 1;
+  // 
+  // 这意味着：
+  // - 顺序不保证：map 是无序的，不要依赖插入顺序
+  // - 键唯一性：同一个键多次设置，后面的值会覆盖前面的值
+  // - 空值处理：value 可以为空字符串，但不能为 null
+  // 
+  // 【性能考虑】
+  // - 查找时间复杂度：O(1)（哈希表实现）
+  // - 内存占用：每个 entry 大约 50-100 字节（取决于 key/value 长度）
+  // - 序列化速度：比 repeated 字段稍慢，但可以接受
+  // 
+  // 【限制条件】
+  // - 键名不能为空字符串
+  // - 键名不能包含控制字符（ASCII 0-31）
+  // - 建议键名长度 < 100 字符
+  // - 建议值长度 < 1000 字符
+  // - 总 entry 数量建议 < 100
+  // 
+  // 【常见用途】
+  // 1. 追踪信息：X-Trace-ID, X-Span-ID, X-Correlation-ID
+  // 2. 身份信息：X-Tenant-ID, X-User-ID, X-Client-ID
+  // 3. 时间信息：X-Request-Time, X-Timeout
+  // 4. 版本信息：X-API-Version, X-Client-Version
+  // 5. 业务标签：X-Environment, X-Region, X-Zone
+  // 6. 幂等性：X-Idempotency-Key
+  // 7. 调试信息：X-Debug-Mode, X-Log-Level
+  //
   // Custom headers used to record custom information.
   map<string, string> custom_headers = 1;
 }
