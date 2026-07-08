@@ -84,7 +84,43 @@ import static org.secretflow.secretpad.service.constant.Constants.TEE_PROJECT_MO
 import static org.secretflow.secretpad.service.util.JobUtils.genTaskOutputId;
 
 /**
- * Graph service implementation class
+ * GraphServiceImpl
+ * =============================================================================
+ * 该类负责 SecretPad 平台中“画布（Graph/DAG）”的全生命周期管理，包括：
+ *
+ * 1. 画布管理：创建、删除、查询、更新画布元数据；保存/全量更新画布节点与边。
+ * 2. 节点管理：单个节点的增删改查、节点最大序号刷新。
+ * 3. 画布运行：把用户选中的 DAG 节点转换为可执行的 ProjectJob，经 JobChain
+ *    持久化 → 渲染 → 提交给 Kuscia。
+ * 4. 状态与输出查询：查询画布下各节点的最新运行状态、日志、输出结果（报告、
+ *    模型、规则、联邦表等）。
+ * 5. 任务控制：停止画布中正在运行的节点或整个画布的任务。
+ *
+ * 核心流程：
+ *   前端画布(nodes/edges) ──save/update──→ project_graph / project_graph_node 表
+ *                                          │
+ *                                          ▼
+ *   用户点击“运行”：startGraph(request) ──→ 校验权限 → 找顶层节点 → 找参与方
+ *                                          │
+ *                                          ▼
+ *                              verifyNodeAndRouteHealthy (节点/路由健康检查)
+ *                                          │
+ *                                          ▼
+ *                              ProjectJob.genProjectJob(graphDO, selectedNodes, parties)
+ *                                          │
+ *                                          ▼
+ *                              jobChain.proceed(projectJob) [JobChain 三阶段]
+ *                                          │
+ *                                          ▼
+ *                              Kuscia CreateJob gRPC 调用
+ *
+ * 关键依赖：
+ *   - graphRepository / graphNodeRepository：画布持久化
+ *   - jobRepository / taskRepository：作业与任务状态
+ *   - jobChain：ProjectJob 处理链（持久化、渲染、提交）
+ *   - componentService：组件元数据与 SecretPad 内置组件判断
+ *   - projectService：停止任务等
+ *   - datatableManager / dataManager / datasourceManager：数据表、DomainData、数据源查询
  *
  * @author yansi
  * @date 2023/5/29
@@ -153,26 +189,65 @@ public class GraphServiceImpl implements GraphService {
     @Resource
     private ProjectScheduleJobRepository projectScheduleJobRepository;
 
+    /**
+     * 列出所有组件（按分类聚合）
+     * -------------------------------------------------------------------------
+     * 直接委托 ComponentService，返回组件树，供前端画布组件面板使用。
+     *
+     * @return 组件分类 -> 组件列表的映射
+     */
     @Override
     public Map<String, CompListVO> listComponents() {
         return componentService.listComponents();
     }
 
+    /**
+     * 查询单个组件定义
+     * -------------------------------------------------------------------------
+     * 根据 domain/name/version 定位组件，返回 ComponentDef protobuf 对象。
+     *
+     * @param request 组件定位请求
+     * @return 组件定义
+     */
     @Override
     public ComponentDef getComponent(GetComponentRequest request) {
         return componentService.getComponent(GetComponentRequest.toComponentKey(request));
     }
 
+    /**
+     * 批量查询组件定义
+     *
+     * @param request 组件定位请求列表
+     * @return 组件定义列表
+     */
     @Override
     public List<ComponentDef> batchGetComponent(List<GetComponentRequest> request) {
         return componentService.batchGetComponent(GetComponentRequest.toComponentKeyList(request));
     }
 
+    /**
+     * 列出组件国际化信息
+     *
+     * @return 组件 i18n 数据
+     */
     @Override
     public Object listComponentI18n() {
         return componentService.listComponentI18n();
     }
 
+    /**
+     * 创建新画布
+     * -------------------------------------------------------------------------
+     * 执行流程：
+     *   1. 生成 8 位随机 graphId。
+     *   2. 构建 ProjectGraphDO，设置 ownerId 为当前登录用户所属节点。
+     *   3. 把请求中的 nodes / edges 转换为持久化对象。
+     *   4. 初始化 nodeMaxIndex 为 32（DEFAULT_INITIAL_INDEX），前端新增节点时从此值递增。
+     *   5. 保存 project_graph 表，并同步初始化该画布的默认数据源配置。
+     *
+     * @param request 创建画布请求（projectId、name、nodes、edges）
+     * @return 包含新生成 graphId 的视图对象
+     */
     @Transactional
     @Override
     public CreateGraphVO createGraph(CreateGraphRequest request) {
@@ -195,6 +270,15 @@ public class GraphServiceImpl implements GraphService {
         return CreateGraphVO.builder().graphId(graphId).build();
     }
 
+    /**
+     * 删除画布
+     * -------------------------------------------------------------------------
+     * 先校验当前用户是否为画布所有者，再级联删除 project_graph 主表记录。
+     * 由于 ProjectGraphDO.nodes 配置了 CascadeType.ALL + orphanRemoval，
+     * 关联的 project_graph_node 子表记录会一并删除。
+     *
+     * @param request 删除画布请求（projectId、graphId）
+     */
     @Override
     public void deleteGraph(DeleteGraphRequest request) {
         // check project graph owner
@@ -202,6 +286,14 @@ public class GraphServiceImpl implements GraphService {
         graphRepository.deleteById(new ProjectGraphDO.UPK(request.getProjectId(), request.getGraphId()));
     }
 
+    /**
+     * 查询项目下的所有画布列表
+     * -------------------------------------------------------------------------
+     * 根据 projectId 查询 project_graph 表，转换为 GraphMetaVO 列表返回。
+     *
+     * @param request 查询请求（projectId）
+     * @return 画布元数据列表
+     */
     @Override
     public List<GraphMetaVO> listGraph(ListGraphRequest request) {
         List<ProjectGraphDO> graphDOList = graphRepository.findByProjectId(request.getProjectId());
@@ -211,6 +303,15 @@ public class GraphServiceImpl implements GraphService {
         return new ArrayList<>();
     }
 
+    /**
+     * 更新画布元数据（仅名称）
+     * -------------------------------------------------------------------------
+     * 1. 校验画布是否存在。
+     * 2. AUTONOMY（自治/P2P）模式下，只有画布所有者才能修改名称。
+     * 3. 更新 project_graph.name 并保存。
+     *
+     * @param request 更新请求（projectId、graphId、name）
+     */
     @Override
     public void updateGraphMeta(UpdateGraphMetaRequest request) {
         Optional<ProjectGraphDO> graphDOOptional = graphRepository.findById(new ProjectGraphDO.UPK(request.getProjectId(), request.getGraphId()));
@@ -225,6 +326,20 @@ public class GraphServiceImpl implements GraphService {
         graphRepository.save(graphDO);
     }
 
+    /**
+     * 全量更新画布（保存画布时调用）
+     * -------------------------------------------------------------------------
+     * 执行流程：
+     *   1. Center 模式校验画布所有者；非 Center 模式仅校验画布是否存在。
+     *   2. 若请求携带 nodes，清空原节点列表并替换为新的 GraphNodeInfo 列表。
+     *   3. 若请求携带 edges，替换为新的边列表。
+     *   4. 若请求携带 maxParallelism，更新最大并行度。
+     *   5. 保存 project_graph 表，并同步更新画布数据源配置。
+     *
+     * 注意：本方法使用 @Transactional 保证 nodes/edges 替换与主表更新在同一个事务。
+     *
+     * @param request 全量更新请求（projectId、graphId、nodes、edges、maxParallelism）
+     */
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void fullUpdateGraph(FullUpdateGraphRequest request) {
@@ -260,6 +375,15 @@ public class GraphServiceImpl implements GraphService {
         projectGraphDomainDatasourceService.updateProjectGraphDomainDatasourceDOByFullUpdateGraphRequest(request);
     }
 
+    /**
+     * 更新单个画布节点
+     * -------------------------------------------------------------------------
+     * 1. 校验画布所有者。
+     * 2. 校验节点是否存在。
+     * 3. 将 GraphNodeInfo 转换为 ProjectGraphNodeDO 并保存（更新节点参数、inputs/outputs 等）。
+     *
+     * @param request 更新节点请求（projectId、graphId、node）
+     */
     @Override
     public void updateGraphNode(UpdateGraphNodeRequest request) {
         String projectId = request.getProjectId();
@@ -276,6 +400,17 @@ public class GraphServiceImpl implements GraphService {
         graphNodeRepository.save(graphNodeDO);
     }
 
+    /**
+     * 查询画布详情
+     * -------------------------------------------------------------------------
+     * 1. 根据 projectId + graphId 查询 project_graph。
+     * 2. 调用 getLatestTaskStatus 获取画布下每个节点的最新运行状态。
+     * 3. 将 ProjectGraphDO 与节点状态合并为 GraphDetailVO。
+     * 4. 补充数据源配置（各节点可使用的默认数据源）。
+     *
+     * @param request 查询请求（projectId、graphId）
+     * @return 画布详情（包含 nodes、edges、各节点状态、数据源配置）
+     */
     @Transactional
     @Override
     public GraphDetailVO getGraphDetail(GetGraphRequest request) {
@@ -290,6 +425,15 @@ public class GraphServiceImpl implements GraphService {
         return graphDetailVO;
     }
 
+    /**
+     * 查询画布节点的输出结果（按最新任务）
+     * -------------------------------------------------------------------------
+     * 1. 根据 projectId + graphNodeId 找到该节点最近一次执行的任务 ProjectTaskDO。
+     * 2. 调用 getGraphNodeTaskOutputVO 解析该任务的指定 outputId 结果。
+     *
+     * @param request 查询请求（projectId、graphNodeId、outputId）
+     * @return 节点输出视图（包含输出类型、结果元数据、各方数据表信息等）
+     */
     @Override
     public GraphNodeOutputVO getGraphNodeOutput(GraphNodeOutputRequest request) {
         String projectId = request.getProjectId();
@@ -300,12 +444,33 @@ public class GraphServiceImpl implements GraphService {
         return getGraphNodeTaskOutputVO(taskDOOptional.get(), request.getOutputId());
     }
 
+    /**
+     * 按 jobId + taskId + outputId 查询指定任务的输出结果
+     * -------------------------------------------------------------------------
+     * 1. 通过 openProjectJobTask 打开指定 ProjectJob / ProjectScheduleJob 并取出任务。
+     * 2. 调用 getGraphNodeTaskOutputVO 解析输出。
+     *
+     * @param request 查询请求（projectId、jobId、taskId、outputId）
+     * @return 节点输出视图
+     */
     @Override
     public GraphNodeOutputVO getGraphNodeTaskOutputVO(GetProjectJobTaskOutputRequest request) {
         ProjectTaskDO jobTask = openProjectJobTask(request.getJobId(), request.getTaskId());
         return getGraphNodeTaskOutputVO(jobTask, request.getOutputId());
     }
 
+    /**
+     * 刷新画布的节点最大序号
+     * -------------------------------------------------------------------------
+     * 前端新增节点时需要保证 node id 不冲突，因此向服务端申请一个新的序号。
+     * 逻辑：
+     *   - 若前端传入的 currentIndex 大于 DB 中存储的 nodeMaxIndex，则以 currentIndex 为准，
+     *     并把 DB 中值设为 currentIndex + 1。
+     *   - 否则把 DB 中 nodeMaxIndex 加 1 返回。
+     *
+     * @param request 刷新请求（projectId、graphId、currentIndex）
+     * @return 当前可用的最大序号
+     */
     @Override
     public GraphNodeMaxIndexRefreshVO refreshNodeMaxIndex(GraphNodeMaxIndexRefreshRequest request) {
         Optional<ProjectGraphDO> projectGraphDOOptional = graphRepository.findById(new ProjectGraphDO.UPK(request.getProjectId(), request.getGraphId()));
@@ -325,11 +490,16 @@ public class GraphServiceImpl implements GraphService {
     }
 
     /**
-     * Query project job by jobId then return job tasks by taskId
+     * 根据 jobId + taskId 打开项目任务
+     * -------------------------------------------------------------------------
+     * 兼容普通 ProjectJob 与定时调度 ProjectScheduleJob：
+     *   1. 先按 jobId 查 project_job 表。
+     *   2. 若不存在，则查 project_schedule_job 表，并转换为 ProjectJobDO。
+     *   3. 从 job.tasks 中取出指定 taskId 的 ProjectTaskDO。
      *
-     * @param jobId  target jobId
-     * @param taskId target taskId
-     * @return project task data object
+     * @param jobId  作业 ID
+     * @param taskId 任务 ID
+     * @return 项目任务对象
      */
     private ProjectTaskDO openProjectJobTask(String jobId, String taskId) {
         Optional<ProjectJobDO> jobOpt = jobRepository.findByJobId(jobId);
@@ -349,11 +519,21 @@ public class GraphServiceImpl implements GraphService {
     }
 
     /**
-     * Build graph node output view object by project task data object and outputId
+     * 构建指定任务、指定 outputId 的输出视图
+     * -------------------------------------------------------------------------
+     * 这是输出查询的核心方法，支持两类组件：
      *
-     * @param taskDO   target project task data object
-     * @param outputId target outputId
-     * @return graph node output view object
+     * 1. SecretPad 内置组件（如 read_data/datatable、read_model）：
+     *    - 直接查询 project_datatable / project_model_pack 等表组装结果。
+     * 2. SecretFlow 组件（如 ml.train/ss_sgd_train）：
+     *    - 通过 taskDO.graphNode.outputs 校验 outputId 是否合法。
+     *    - 按 projectId + taskId + latestOutputId 查 project_result 表。
+     *    - 根据 ResultKind（Report/Model/Rule/FedTable/READ_DATA）分别构造 OutputResult。
+     *    - AUTONOMY 模式下需要考虑目标节点转换（targetNodeId）。
+     *
+     * @param taskDO   项目任务对象
+     * @param outputId 输出端口 ID
+     * @return 节点输出视图
      */
     private GraphNodeOutputVO getGraphNodeTaskOutputVO(ProjectTaskDO taskDO, String outputId) {
         String projectId = taskDO.getUpk().getProjectId();
@@ -512,6 +692,17 @@ public class GraphServiceImpl implements GraphService {
         return outputVO;
     }
 
+    /**
+     * 读取报告类型输出
+     * -------------------------------------------------------------------------
+     * 从 project_report 表中取出报告内容 JSON，解析并设置到 outputVO.tabs。
+     * 若内容为 SCQL 报告格式，先转换再返回。
+     *
+     * @param projectId     项目 ID
+     * @param latestOutputId 最新输出 ID
+     * @param outputVO      待填充的输出视图
+     * @return 填充后的输出视图
+     */
     private @NotNull GraphNodeOutputVO getGraphNodeOutputVO(String projectId, String latestOutputId, GraphNodeOutputVO outputVO) {
         Optional<ProjectReportDO> reportDOOptional = reportRepository.findById(new ProjectReportDO.UPK(projectId, latestOutputId));
         if (reportDOOptional.isEmpty()) {
@@ -539,6 +730,17 @@ public class GraphServiceImpl implements GraphService {
         return outputVO;
     }
 
+    /**
+     * 补偿 SecretPad 内置组件的输出展示
+     * -------------------------------------------------------------------------
+     * 针对 binning_modifications 和 model_param_modifications 这两个内置组件，
+     * 它们的第二个输出（outputId 以 "1" 结尾）需要从前置 read_data 任务的结果中
+     * 补偿 raw tabs 内容，否则前端无法正常展示。
+     *
+     * @param taskDO   当前任务
+     * @param outputId 输出端口 ID
+     * @param outputVO 输出视图
+     */
     private void compensationSecretPadComponent(ProjectTaskDO taskDO, String outputId, GraphNodeOutputVO outputVO) {
         String projectId = taskDO.getUpk().getProjectId();
         ProjectGraphNodeDO graphNode = taskDO.getGraphNode();
@@ -571,6 +773,18 @@ public class GraphServiceImpl implements GraphService {
 
     }
 
+    /**
+     * 按 nodeId + resultId 查询结果输出
+     * -------------------------------------------------------------------------
+     * 主要用于结果中心或模型/规则列表中点击查看某条结果。
+     * 1. 查 project_result 表定位结果记录。
+     * 2. 打开对应 ProjectJobTask。
+     * 3. 根据 ResultKind 组装 OutputResult；TEE 模式下需转换 centerResultId 和 centerNodeId。
+     *
+     * @param nodeId   节点 ID（domainId）
+     * @param resultId 结果引用 ID
+     * @return 节点输出视图
+     */
     @Override
     public GraphNodeOutputVO getResultOutputVO(String nodeId, String resultId) {
         GraphNodeOutputVO outputVO = GraphNodeOutputVO.builder().build();
@@ -625,12 +839,17 @@ public class GraphServiceImpl implements GraphService {
     }
 
     /**
-     * Build graph node output result from project datatable data object
+     * 从 ProjectDatatableDO 构建输出结果项
+     * -------------------------------------------------------------------------
+     * 1. 解析 tableConfig 得到字段名、字段类型列表；
+     *    Center 模式下会过滤掉非当前 edge 的 individual 列（保护隐私）。
+     * 2. 组装 OutputResult（nodeId、type、fields、tableId）。
+     * 3. 通过 datatableManager 查询对应 DomainData，补充 relativeUri 和 datasourceId。
      *
-     * @param datatableDO target project datatable data object
-     * @param edgeNodeId  edge node id
-     * @param edgeTableId edge table id
-     * @return graph node output result
+     * @param datatableDO 项目数据表对象
+     * @param edgeNodeId  当前连线的源节点 ID（用于 individual 列过滤）
+     * @param edgeTableId 当前连线的源表 ID
+     * @return 输出结果项
      */
     private GraphNodeOutputVO.OutputResult fromDatatable(ProjectDatatableDO datatableDO, String edgeNodeId, String edgeTableId) {
         List<ProjectDatatableDO.TableColumnConfig> tableConfig = datatableDO.getTableConfig();
@@ -668,6 +887,27 @@ public class GraphServiceImpl implements GraphService {
         return outputResult;
     }
 
+    /**
+     * 启动画布运行（核心入口）
+     * -------------------------------------------------------------------------
+     * 用户在前端选中部分节点点击“运行”后触发。执行流程：
+     *
+     * 1. 校验画布所有者，并确认画布非空。
+     * 2. 校验用户选中的 nodes 是否全部存在于当前画布。
+     * 3. 查找项目信息。
+     * 4. 计算每个选中节点的“顶层节点”集合（findTopNodes）：
+     *    即当前节点运行所需的最小上游依赖集合，用于确定参与方。
+     * 5. 根据顶层节点涉及的数据表，计算每个选中节点对应的参与方 parties（findParties）。
+     * 6. 把项目信息、参与方列表、断点标志写入 GraphContext 线程上下文。
+     * 7. TEE 模式下：所有参与方强制替换为 TEE 节点。
+     * 8. 健康检查：verifyNodeAndRouteHealthy 校验各节点就绪、跨节点路由可达。
+     * 9. 生成 ProjectJob：ProjectJob.genProjectJob(graphDO, selectedNodes, parties)。
+     * 10. 经 JobChain 处理：持久化 → 渲染输入输出 → 提交 Kuscia CreateJob。
+     * 11. 非定时调度场景清理 GraphContext。
+     *
+     * @param request 启动请求（projectId、graphId、nodes、breakpoint 等）
+     * @return 包含新生成 jobId 的 StartGraphVO
+     */
     @Transactional
     @Override
     public StartGraphVO startGraph(StartGraphRequest request) {
@@ -710,11 +950,14 @@ public class GraphServiceImpl implements GraphService {
     }
 
     /**
-     * check project Graph owner
+     * 校验画布所有者
+     * -------------------------------------------------------------------------
+     * 1. 校验画布是否存在。
+     * 2. 校验当前登录用户的 ownerId 是否与画布的 ownerId 一致；不一致则抛出无权限异常。
      *
-     * @param projectId Project id
-     * @param graphId   Graph Id
-     * @return ProjectGraphDO
+     * @param projectId 项目 ID
+     * @param graphId   画布 ID
+     * @return 校验通过的画布对象
      */
     private ProjectGraphDO ownerCheck(String projectId, String graphId) {
         Optional<ProjectGraphDO> graphOptional = graphRepository.findById(new ProjectGraphDO.UPK(projectId, graphId));
@@ -729,6 +972,15 @@ public class GraphServiceImpl implements GraphService {
         return graphDO;
     }
 
+    /**
+     * 查询画布下各节点的最新运行状态
+     * -------------------------------------------------------------------------
+     * 1. 根据 projectId + graphId 加载画布。
+     * 2. 调用 getLatestTaskStatus 获取每个 graphNodeId 对应的最新任务状态。
+     *
+     * @param request 查询请求（projectId、graphId）
+     * @return 画布状态（各节点状态 + 是否全部完成）
+     */
     @Override
     public GraphStatus listGraphNodeStatus(ListGraphNodeStatusRequest request) {
         String projectId = request.getProjectId();
@@ -741,11 +993,18 @@ public class GraphServiceImpl implements GraphService {
     }
 
     /**
-     * Find latest task status
-     * Todo: find latest task with one sql
+     * 获取画布下每个节点的最新任务状态
+     * -------------------------------------------------------------------------
+     * 对每个 graphNode：
+     *   1. 查 project_job_task 表找到该节点最近一次任务。
+     *   2. 填充 taskId、jobId、parties、progress、status。
+     *   3. 若没有任何任务记录，则状态为 STAGING。
+     * 最后汇总所有关联 job 的状态，判断整个画布是否已结束（finished）。
      *
-     * @param graphDO target graph data object
-     * @return latest graph task status
+     * TODO：目前对每个节点单独查表，可优化为一次 SQL。
+     *
+     * @param graphDO 画布对象
+     * @return 画布状态视图
      */
     public GraphStatus getLatestTaskStatus(ProjectGraphDO graphDO) {
         String projectId = graphDO.getUpk().getProjectId();
@@ -792,6 +1051,17 @@ public class GraphServiceImpl implements GraphService {
     }
 
 
+    /**
+     * 查询画布节点的运行日志
+     * -------------------------------------------------------------------------
+     * 1. 根据 projectId + graphNodeId 找到该节点最新任务。
+     * 2. 从 project_job_task_log 表读取该任务的日志列表并去重。
+     * 3. 对于 read_data/datatable 内置组件，若日志为空，则构造默认 start/succeed 日志兜底。
+     * 4. 对同一任务多次运行的 start/succeed 日志进行去重（distinctSpecifyLogs）。
+     *
+     * @param request 查询请求（projectId、graphNodeId）
+     * @return 节点任务日志视图
+     */
     @Override
     public GraphNodeTaskLogsVO getGraphNodeLogs(GraphNodeLogsRequest request) {
         Optional<ProjectTaskDO> taskDOOptional = taskRepository.findLatestTasks(request.getProjectId(), request.getGraphNodeId());
@@ -817,6 +1087,16 @@ public class GraphServiceImpl implements GraphService {
         return graphNodeTaskLogsVO;
     }
 
+    /**
+     * 停止画布节点或整个画布的运行任务
+     * -------------------------------------------------------------------------
+     * 1. 校验画布所有者。
+     * 2. 若 graphNodeId 为空，则停止该画布下所有 RUNNING 状态的 ProjectJob。
+     * 3. 若 graphNodeId 不为空，则停止与该节点关联的所有 RUNNING 任务对应的 ProjectJob。
+     * 4. 调用 projectService.stopProjectJob 逐一向 Kuscia 发送 StopJob 请求。
+     *
+     * @param request 停止请求（projectId、graphId、graphNodeId 可选）
+     */
     @Override
     public void stopGraphNode(StopGraphNodeRequest request) {
         String projectId = request.getProjectId();
@@ -844,6 +1124,22 @@ public class GraphServiceImpl implements GraphService {
     }
 
 
+    /**
+     * 校验参与方节点健康与跨节点路由可达
+     * -------------------------------------------------------------------------
+     * 在提交 Kuscia Job 之前执行，保证任务所需各方均可用：
+     *
+     * - AUTONOMY（自治/P2P）模式：
+     *   1. 单方任务直接通过。
+     *   2. 多方任务时，根据本机构节点与路由表判断源→目的路由是否可用；
+     *      不可用且存在项目邀请关系时抛异常。
+     * - 非 AUTONOMY 模式（Center/Edge）：
+     *   1. 检查每个参与方节点是否就绪（nodeManager.checkNodeReady）。
+     *   2. 检查每对参与方之间的节点路由是否就绪（nodeRouteManager.checkNodeRouteReady）。
+     *
+     * @param parties   本次运行涉及的所有参与方节点 ID 集合
+     * @param projectId 项目 ID
+     */
     public void verifyNodeAndRouteHealthy(Set<String> parties, String projectId) {
         log.info("before graph run healthy check: {}", parties);
         if (PlatformTypeEnum.AUTONOMY.equals(PlatformTypeEnum.valueOf(plaformType))) {
@@ -933,7 +1229,15 @@ public class GraphServiceImpl implements GraphService {
     }
 
 
-    //Delete redundant start and succeed logs
+    /**
+     * 去除重复的开始/成功日志
+     * -------------------------------------------------------------------------
+     * 同一节点被多次运行时，日志中会出现多条 start/succeed 记录；
+     * 本方法保留第一条匹配记录，后续重复记录（不含 failed）被剔除。
+     *
+     * @param graphNodeTaskLogsVO 日志视图
+     * @param distinctValue       需要去重的日志关键字
+     */
     private void distinctSpecifyLogs(GraphNodeTaskLogsVO graphNodeTaskLogsVO, String distinctValue) {
         List<String> logs = graphNodeTaskLogsVO.getLogs();
         List<String> uniqueList = new ArrayList<>();
@@ -953,6 +1257,16 @@ public class GraphServiceImpl implements GraphService {
         graphNodeTaskLogsVO.setLogs(uniqueList);
     }
 
+    /**
+     * 计算每个选中节点的顶层依赖节点集合
+     * -------------------------------------------------------------------------
+     * “顶层节点”指运行当前节点所必须的最小上游节点集合（通过 edges 逆向追溯得到）。
+     * 该集合用于后续 findParties 确定每个任务的参与方。
+     *
+     * @param edges        画布边列表
+     * @param selectedNodes 用户选中的运行节点
+     * @return Map<graphNodeId, 顶层节点 graphNodeId 集合>
+     */
     private Map<String, Set<String>> findTopNodes(List<GraphEdgeDO> edges, List<ProjectGraphNodeDO> selectedNodes) {
         Map<String, Set<String>> tops = new HashMap<>();
         selectedNodes.forEach(node -> {
@@ -962,6 +1276,24 @@ public class GraphServiceImpl implements GraphService {
         return tops;
     }
 
+    /**
+     * 计算每个选中节点对应的参与方集合
+     * -------------------------------------------------------------------------
+     * 对每个选中节点：
+     *   1. 遍历其顶层依赖节点。
+     *   2. 若顶层节点是 read_data/datatable 类组件，从 project_datatable 表找到该数据表归属的 nodeId，
+     *      即为参与方。
+     *   3. 收集列属性（ColumnAttr）到 GraphContext，供后续 TaskInputConfig 使用。
+     *   4. 特殊处理 data_prep/unbalance_psi_cache 组件：额外加入隐藏的 partyId。
+     *
+     * 注意：按顶层集合大小排序后再处理，保证小集合先被解析，避免上下文覆盖问题。
+     *
+     * @param nodes      画布所有节点
+     * @param tops       每个选中节点的顶层依赖集合
+     * @param projectId  项目 ID
+     * @param partyList  输出参数：收集各数据表与节点的对应关系
+     * @return Map<graphNodeId, 参与方 nodeId 集合>
+     */
     private Map<String, Set<String>> findParties(List<ProjectGraphNodeDO> nodes, Map<String, Set<String>> tops, String projectId, List<GraphContext.GraphParty> partyList) {
         Map<String, Set<String>> result = new HashMap<>();
         Map<String, ProjectGraphNodeDO> nodeDOMap = nodes.stream().collect(Collectors.toMap(e -> (e.getUpk()).getGraphNodeId(), Function.identity()));
@@ -1008,6 +1340,18 @@ public class GraphServiceImpl implements GraphService {
     }
 
 
+    /**
+     * 将 ProjectDatatableDO 的列配置转换为 TaskConfig.ColumnAttr
+     * -------------------------------------------------------------------------
+     * 列类型映射规则：
+     *   - associateKey = true          → COL_TYPE_ID（ID 列）
+     *   - groupKey = false 且 protection = true → COL_TYPE_LABEL（标签列）
+     *   - groupKey = false 且 protection = false → COL_TYPE_FEATURE（特征列）
+     *   - groupKey = true              → COL_TYPE_BIN（分箱列）
+     *
+     * @param columnConfig 数据表列配置
+     * @return Protobuf ColumnAttr 对象
+     */
     private TaskConfig.ColumnAttr parse(ProjectDatatableDO.TableColumnConfig columnConfig) {
         String colType;
         if (columnConfig.isAssociateKey()) {
