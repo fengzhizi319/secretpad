@@ -21,15 +21,16 @@
 # 说明：本脚本仍需要 SECRETPAD_IMAGE，仅用于抽取 /app/scripts/deploy 下的公共脚本
 # ============================================================================
 
-export KUSCIA_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/kuscia:0.13.0b0"
-export SECRETPAD_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/secretpad:0.12.0b0"
-export SECRETFLOW_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/secretflow-lite-anolis8:1.11.0b1"
-export SECRETFLOW_SERVING_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/serving-anolis8:0.8.0b0"
-export TEE_APP_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/teeapps-sim-ubuntu20.04:0.1.2b0"
-export TEE_DM_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/sf-tee-dm-sim:0.1.0b0"
-export CAPSULE_MANAGER_SIM_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/capsule-manager-sim-ubuntu20.04:v0.1.0b0"
-export DATAPROXY_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/dataproxy:0.3.0b0"
-export SCQL_IMAGE="secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/scql:0.9.2b1"
+# 允许通过环境变量覆盖镜像，便于二次开发使用本地构建的镜像
+export KUSCIA_IMAGE="${KUSCIA_IMAGE:-secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/kuscia:0.13.0b0}"
+export SECRETPAD_IMAGE="${SECRETPAD_IMAGE:-secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/secretpad:0.12.0b0}"
+export SECRETFLOW_IMAGE="${SECRETFLOW_IMAGE:-secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/secretflow-lite-anolis8:1.11.0b1}"
+export SECRETFLOW_SERVING_IMAGE="${SECRETFLOW_SERVING_IMAGE:-secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/serving-anolis8:0.8.0b0}"
+export TEE_APP_IMAGE="${TEE_APP_IMAGE:-secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/teeapps-sim-ubuntu20.04:0.1.2b0}"
+export TEE_DM_IMAGE="${TEE_DM_IMAGE:-secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/sf-tee-dm-sim:0.1.0b0}"
+export CAPSULE_MANAGER_SIM_IMAGE="${CAPSULE_MANAGER_SIM_IMAGE:-secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/capsule-manager-sim-ubuntu20.04:v0.1.0b0}"
+export DATAPROXY_IMAGE="${DATAPROXY_IMAGE:-secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/dataproxy:0.3.0b0}"
+export SCQL_IMAGE="${SCQL_IMAGE:-secretflow-registry.cn-hangzhou.cr.aliyuncs.com/secretflow/scql:0.9.2b1}"
 
 # MPC only: do not pull/register TEE images for local development
 export DEPLOY_MODE="MPC"
@@ -307,35 +308,44 @@ function load_docker_images() {
 		init_images_from_files
 	else
 		echo "load docker image by environment variable"
+		pull_if_missing() {
+			local img="$1"
+			if docker image inspect "$img" >/dev/null 2>&1; then
+				echo "本地镜像已存在，跳过拉取：$img"
+			else
+				echo "拉取镜像：$img"
+				docker pull "$img"
+			fi
+		}
 		if [ "${DEPLOY_MODE}" = 'ALL-IN-ONE' ]; then
-			docker pull "${SECRETPAD_IMAGE}"
-			docker pull "${KUSCIA_IMAGE}"
-			docker pull "${SECRETFLOW_IMAGE}"
-			docker pull "${SECRETFLOW_SERVING_IMAGE}"
-			docker pull "${TEE_APP_IMAGE}"
-			docker pull "${TEE_DM_IMAGE}"
-			docker pull "${CAPSULE_MANAGER_SIM_IMAGE}"
-			docker pull "${DATAPROXY_IMAGE}"
+			pull_if_missing "${SECRETPAD_IMAGE}"
+			pull_if_missing "${KUSCIA_IMAGE}"
+			pull_if_missing "${SECRETFLOW_IMAGE}"
+			pull_if_missing "${SECRETFLOW_SERVING_IMAGE}"
+			pull_if_missing "${TEE_APP_IMAGE}"
+			pull_if_missing "${TEE_DM_IMAGE}"
+			pull_if_missing "${CAPSULE_MANAGER_SIM_IMAGE}"
+			pull_if_missing "${DATAPROXY_IMAGE}"
 			if need_scql; then
-				docker pull "${SCQL_IMAGE}"
+				pull_if_missing "${SCQL_IMAGE}"
 			fi
 		fi
 		if [ "${DEPLOY_MODE}" = 'MPC' ]; then
-			docker pull "${SECRETPAD_IMAGE}"
-			docker pull "${KUSCIA_IMAGE}"
-			docker pull "${SECRETFLOW_IMAGE}"
-			docker pull "${SECRETFLOW_SERVING_IMAGE}"
-			docker pull "${DATAPROXY_IMAGE}"
+			pull_if_missing "${SECRETPAD_IMAGE}"
+			pull_if_missing "${KUSCIA_IMAGE}"
+			pull_if_missing "${SECRETFLOW_IMAGE}"
+			pull_if_missing "${SECRETFLOW_SERVING_IMAGE}"
+			pull_if_missing "${DATAPROXY_IMAGE}"
 			if need_scql; then
-				docker pull "${SCQL_IMAGE}"
+				pull_if_missing "${SCQL_IMAGE}"
 			fi
 		fi
 		if [ "${DEPLOY_MODE}" = 'TEE' ]; then
-			docker pull "${SECRETPAD_IMAGE}"
-			docker pull "${KUSCIA_IMAGE}"
-			docker pull "${TEE_APP_IMAGE}"
-			docker pull "${TEE_DM_IMAGE}"
-			docker pull "${CAPSULE_MANAGER_SIM_IMAGE}"
+			pull_if_missing "${SECRETPAD_IMAGE}"
+			pull_if_missing "${KUSCIA_IMAGE}"
+			pull_if_missing "${TEE_APP_IMAGE}"
+			pull_if_missing "${TEE_DM_IMAGE}"
+			pull_if_missing "${CAPSULE_MANAGER_SIM_IMAGE}"
 		fi
 	fi
 }
