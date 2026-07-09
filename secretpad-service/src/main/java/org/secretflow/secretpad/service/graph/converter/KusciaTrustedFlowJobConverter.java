@@ -22,6 +22,7 @@ import org.secretflow.secretpad.common.util.*;
 import org.secretflow.secretpad.persistence.entity.ProjectDO;
 import org.secretflow.secretpad.service.constant.JobConstants;
 import org.secretflow.secretpad.service.graph.GraphContext;
+import org.secretflow.secretpad.service.graph.NodeDefUtils;
 import org.secretflow.secretpad.service.model.graph.GraphNodeInfo;
 import org.secretflow.secretpad.service.model.graph.ProjectJob;
 
@@ -151,6 +152,7 @@ public class KusciaTrustedFlowJobConverter implements JobConverter {
                 .build();
         TaskConfig.TaskInputConfig taskInputConfig = TaskConfig.TaskInputConfig.newBuilder()
                 .putAllSfDatasourceConfig(defaultDatasourceConfig(parties))
+                .setSfNodeEvalParam(NodeDefUtils.toNodeEvalParam(newPipelineNodeDef))
                 .setTeeTaskConfig(sfTeeConfig)
                 .build();
         String req = ProtoUtils.toJsonString(taskInputConfig, typeRegistry);

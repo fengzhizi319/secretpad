@@ -43,9 +43,9 @@ message NodeDef {
 
   repeated google.protobuf.Struct  attrs = 6;
 
-  //  repeated secretflow.spec.v1.Attribute attrs = 6;
+  //  repeated secretflow_spec.v1.Attribute attrs = 6;
 
-  repeated secretflow.spec.v1.DistData inputs = 7;
+  repeated secretflow_spec.v1.DistData inputs = 7;
 
   repeated string output_uris = 8;
 

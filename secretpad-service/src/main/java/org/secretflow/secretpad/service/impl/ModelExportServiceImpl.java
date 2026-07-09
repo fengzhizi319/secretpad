@@ -34,6 +34,7 @@ import org.secretflow.secretpad.service.GraphService;
 import org.secretflow.secretpad.service.ModelExportService;
 import org.secretflow.secretpad.service.constant.JobConstants;
 import org.secretflow.secretpad.service.graph.ComponentTools;
+import org.secretflow.secretpad.service.graph.NodeDefUtils;
 import org.secretflow.secretpad.service.graph.converter.KusciaJobConverter;
 import org.secretflow.secretpad.service.model.graph.GetGraphRequest;
 import org.secretflow.secretpad.service.model.graph.GraphDetailVO;
@@ -338,7 +339,7 @@ public class ModelExportServiceImpl implements ModelExportService {
                 .build();
     }
 
-    public Pipeline.NodeDef buildNodeEvalParam(ModelExportPackageRequest request) {
+    public com.secretflow.spec.v1.NodeEvalParam buildNodeEvalParam(ModelExportPackageRequest request) {
         List<ModelComponent> modelComponent = request.getModelComponent();
         List<String> inputs = new LinkedList<>();
         List<String> outputs = new LinkedList<>();
@@ -374,6 +375,6 @@ public class ModelExportServiceImpl implements ModelExportService {
         );
         Pipeline.NodeDef.Builder nodeDefBuilder = Pipeline.NodeDef.newBuilder();
         ProtoUtils.fromObject(nodeEvalParam, nodeDefBuilder);
-        return nodeDefBuilder.build();
+        return NodeDefUtils.toNodeEvalParam(nodeDefBuilder.build());
     }
 }

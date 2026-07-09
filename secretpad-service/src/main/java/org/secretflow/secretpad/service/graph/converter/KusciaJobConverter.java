@@ -32,6 +32,7 @@ import org.secretflow.secretpad.service.constant.ComponentConstants;
 import org.secretflow.secretpad.service.constant.JobConstants;
 import org.secretflow.secretpad.service.graph.ComponentTools;
 import org.secretflow.secretpad.service.graph.GraphContext;
+import org.secretflow.secretpad.service.graph.NodeDefUtils;
 import org.secretflow.secretpad.service.model.graph.GraphNodeInfo;
 import org.secretflow.secretpad.service.model.graph.ProjectJob;
 import org.secretflow.secretpad.service.model.model.export.ModelExportPackageRequest;
@@ -231,7 +232,7 @@ public class KusciaJobConverter implements JobConverter {
                 .addAllSfOutputIds(task.getNode().getOutputs())
                 .addAllSfOutputUris(outputUris)
                 .setSfClusterDesc(sfClusterDesc)
-                .setSfNodeEvalParam(pipelineNodeDef)
+                .setSfNodeEvalParam(NodeDefUtils.toNodeEvalParam(pipelineNodeDef))
                 .build();
         return ProtoUtils.toJsonString(taskInputConfig, typeRegistry);
     }

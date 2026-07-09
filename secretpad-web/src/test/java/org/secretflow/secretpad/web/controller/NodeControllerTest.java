@@ -104,7 +104,7 @@ class NodeControllerTest extends ControllerTest {
             "        \"app\": \"\"\n" +
             "    },\n" +
             "    \"meta\": {\n" +
-            "        \"@type\": \"type.googleapis.com/secretflow.spec.v1.Report\",\n" +
+            "        \"@type\": \"type.googleapis.com/secretflow_spec.v1.Report\",\n" +
             "        \"name\": \"psi_report\",\n" +
             "        \"tabs\": [\n" +
             "            {\n" +

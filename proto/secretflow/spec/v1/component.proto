@@ -15,7 +15,7 @@
 
 syntax = "proto3";
 
-package secretflow.spec.v1;
+package secretflow_spec.v1;
 
 option java_outer_classname = "ComponentProto";
 option java_package = "com.secretflow.spec.v1";

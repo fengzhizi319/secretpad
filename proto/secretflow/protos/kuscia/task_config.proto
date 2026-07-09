@@ -21,11 +21,12 @@ option java_package = "org.secretflow.proto.kuscia";
 import "secretflow/protos/component/cluster.proto";
 import "secretflow/protos/pipeline/pipeline.proto";
 import "secretflow/protos/pipeline/task_config.proto";
+import "secretflow/spec/v1/evaluation.proto";
 
 message TaskInputConfig {
   map<string, DatasourceConfig> sf_datasource_config = 1;
   secretflow.component.SFClusterDesc sf_cluster_desc = 2;
-  secretflow.pipeline.NodeDef sf_node_eval_param = 3;
+  secretflow_spec.v1.NodeEvalParam sf_node_eval_param = 3;
   repeated string sf_output_uris = 4;
   repeated string sf_input_ids = 5;
   repeated string sf_input_partitions_spec = 6;

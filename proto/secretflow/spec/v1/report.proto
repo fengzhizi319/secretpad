@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package secretflow.spec.v1;
+package secretflow_spec.v1;
 
 import "secretflow/spec/v1/component.proto";
 

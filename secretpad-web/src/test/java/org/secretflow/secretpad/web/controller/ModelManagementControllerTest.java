@@ -149,7 +149,7 @@ public class ModelManagementControllerTest extends ControllerTest {
                                               "app": ""
                                               },
                                               "meta": {
-                                              "@type": "type.googleapis.com/secretflow.spec.v1.Report",
+                                              "@type": "type.googleapis.com/secretflow_spec.v1.Report",
                                               "name": "used schemas",
                                               "desc": "duration,job_student,job_unemployed,education,job_entrepreneur,balance,default,job_housemaid,pdays,day,job_blue-collar,job_management,job_self-employed,job_technician,campaign,previous,marital_married,job_retired,housing,marital_divorced,loan,age,job_services,marital_single,month_jul,month_may,poutcome_unknown,month_mar,poutcome_failure,poutcome_success,contact_cellular,month_oct,month_nov,month_jun,month_aug,poutcome_other,contact_unknown,month_feb,month_sep,contact_telephone,month_jan,month_dec,month_apr",
                                               "tabs": [],

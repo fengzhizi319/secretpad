@@ -391,7 +391,7 @@ public class JobManagerTest extends ControllerTest {
                       "name": "ouel_uzcbxztr_node_13_output_0",
                       "type": "sf.table.individual",
                       "meta": {
-                      "@type": "type.googleapis.com/secretflow.spec.v1.IndividualTable",
+                      "@type": "type.googleapis.com/secretflow_spec.v1.IndividualTable",
                       "schema": {
                       "ids": [
                       "id2"

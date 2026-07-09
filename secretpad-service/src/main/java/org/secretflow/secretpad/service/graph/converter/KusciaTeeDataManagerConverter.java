@@ -19,6 +19,7 @@ package org.secretflow.secretpad.service.graph.converter;
 import org.secretflow.secretpad.common.constant.ComponentConstants;
 import org.secretflow.secretpad.common.util.ProtoUtils;
 import org.secretflow.secretpad.service.constant.JobConstants;
+import org.secretflow.secretpad.service.graph.NodeDefUtils;
 import org.secretflow.secretpad.service.model.datatable.TeeJob;
 import org.secretflow.secretpad.service.model.graph.ProjectJob;
 
@@ -153,7 +154,7 @@ public class KusciaTeeDataManagerConverter implements JobConverter {
                         ))
                         .addAllInputs(List.of(distDataBuilder.build()))
                         .addAllOutputUris(List.of(outputUri));
-                taskInputConfigBuilder.setSfNodeEvalParam(nodeEvalParamBuilder.build());
+                taskInputConfigBuilder.setSfNodeEvalParam(NodeDefUtils.toNodeEvalParam(nodeEvalParamBuilder.build()));
             }
             case Delete -> {
                 distDataBuilder
@@ -171,7 +172,7 @@ public class KusciaTeeDataManagerConverter implements JobConverter {
                                 Struct.newBuilder().putFields(ComponentConstants.ATTRIBUTE_S, com.google.protobuf.Value.newBuilder().setStringValue(job.getNodeId()).build()).build()
                         ))
                         .addAllInputs(List.of(distDataBuilder.build()));
-                taskInputConfigBuilder.setSfNodeEvalParam(nodeEvalParamBuilder.build());
+                taskInputConfigBuilder.setSfNodeEvalParam(NodeDefUtils.toNodeEvalParam(nodeEvalParamBuilder.build()));
             }
             case Auth -> {
                 distDataBuilder
@@ -213,7 +214,7 @@ public class KusciaTeeDataManagerConverter implements JobConverter {
                                 )
                         )
                         .addAllInputs(List.of(distDataBuilder.build()));
-                taskInputConfigBuilder.setSfNodeEvalParam(nodeEvalParamBuilder.build());
+                taskInputConfigBuilder.setSfNodeEvalParam(NodeDefUtils.toNodeEvalParam(nodeEvalParamBuilder.build()));
                 taskConfigBuilder.setScope(job.getProjectId());
             }
             case Pull -> {
@@ -238,7 +239,7 @@ public class KusciaTeeDataManagerConverter implements JobConverter {
                         ))
                         .addAllInputs(List.of(distDataBuilder.build()))
                         .addAllOutputUris(List.of(outputUri));
-                taskInputConfigBuilder.setSfNodeEvalParam(nodeEvalParamBuilder.build());
+                taskInputConfigBuilder.setSfNodeEvalParam(NodeDefUtils.toNodeEvalParam(nodeEvalParamBuilder.build()));
             }
             default -> {
             }
