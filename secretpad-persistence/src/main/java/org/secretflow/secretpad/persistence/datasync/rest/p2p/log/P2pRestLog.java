@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.secretflow.secretpad.persistence.datasync.rest.p2p.log;
 
 import lombok.extern.slf4j.Slf4j;

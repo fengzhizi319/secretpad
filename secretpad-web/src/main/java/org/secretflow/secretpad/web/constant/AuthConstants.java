@@ -13,10 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.secretflow.secretpad.web.constant;
 
-import java.util.Random;
 
 /**
  * Authorization Constants

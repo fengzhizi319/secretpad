@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.secretflow.secretpad.service.handler.datatable;
 
 import org.secretflow.secretpad.common.constant.Constants;
@@ -104,7 +103,24 @@ public class HttpDatatableHandler implements DatatableHandler {
         String status = success ? Constants.STATUS_AVAILABLE : Constants.STATUS_UNAVAILABLE;
         featureTableDO.setStatus(status);
         featureTableRepository.save(featureTableDO);
-        DatatableDTO datatableDTO = DatatableDTO.builder().datatableId(featureTableDO.getUpk().getFeatureTableId()).datatableName(featureTableDO.getFeatureTableName()).nodeId(featureTableDO.getNodeId()).relativeUri(featureTableDO.getUrl()).datasourceId(DomainDatasourceConstants.DEFAULT_HTTP_DATASOURCE_ID).status(status).datasourceType(DataSourceTypeEnum.HTTP.name()).type(DataTableTypeEnum.HTTP.name()).schema(featureTableDO.getColumns().stream().map(it -> new DatatableDTO.TableColumnDTO(it.getColName(), it.getColType(), it.getColComment())).collect(Collectors.toList())).build();
+        DatatableDTO datatableDTO =
+            DatatableDTO.builder()
+                .datatableId(featureTableDO.getUpk().getFeatureTableId())
+                .datatableName(featureTableDO.getFeatureTableName())
+                .nodeId(featureTableDO.getNodeId())
+                .relativeUri(featureTableDO.getUrl())
+                .datasourceId(DomainDatasourceConstants.DEFAULT_HTTP_DATASOURCE_ID)
+                .status(status)
+                .datasourceType(DataSourceTypeEnum.HTTP.name())
+                .type(DataTableTypeEnum.HTTP.name())
+                .schema(
+                    featureTableDO.getColumns().stream()
+                        .map(
+                            it ->
+                                new DatatableDTO.TableColumnDTO(
+                                    it.getColName(), it.getColType(), it.getColComment()))
+                        .collect(Collectors.toList()))
+                .build();
         DatatableVO datatableVO = DatatableVO.from(datatableDTO, datatableAuthPairs.containsKey(datatableDTO.getDatatableId()) ? AuthProjectVO.fromPairs(datatableAuthPairs.get(datatableDTO.getDatatableId())) : null, null);
         return DatatableNodeVO.builder().datatableVO(datatableVO).nodeId(request.getNodeId()).nodeName(nodeRepository.findByNodeId(request.getNodeId()).getName()).build();
     }

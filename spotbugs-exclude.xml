@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2024 Ant Group Co., Ltd.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<!--
+  SpotBugs 排除规则。
+  首次接入 SpotBugs 时，历史代码中存在大量低危/设计类告警，一次性全部修复风险高。
+  先抑制以下类别，优先保证 CI 通过；后续随重构逐步修复：
+    - EI_EXPOSE_REP / EI_EXPOSE_REP2：DTO getter/setter 暴露可变集合，属于历史设计。
+    - DM_DEFAULT_ENCODING：默认编码依赖，历史工具类行为。
+    - ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD：Spring setter 注入静态字段的常见模式。
+    - MS_SHOULD_BE_FINAL / MS_MUTABLE_COLLECTION：静态集合/字段设计。
+    - RCN_REDUNDANT_NULLCHECK：冗余 null 检查。
+    - RV_RETURN_VALUE_IGNORED_BAD_PRACTICE：mkdirs 等返回值忽略。
+    - REC_CATCH_EXCEPTION：宽泛 catch Exception。
+    - NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE / NP_NONNULL_PARAM_VIOLATION：空指针相关 heuristic 告警。
+    - SE_BAD_FIELD：Serializable 字段非 transient。
+-->
+<FindBugsFilter>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Bug pattern="DM_DEFAULT_ENCODING"/>
+    </Match>
+    <Match>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+    </Match>
+    <Match>
+        <Bug pattern="MS_SHOULD_BE_FINAL,MS_MUTABLE_COLLECTION"/>
+    </Match>
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE,RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
+    </Match>
+    <Match>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    </Match>
+    <Match>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+    <Match>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE,NP_NULL_ON_SOME_PATH,NP_NONNULL_PARAM_VIOLATION"/>
+    </Match>
+    <Match>
+        <Bug pattern="SE_BAD_FIELD"/>
+    </Match>
+    <!-- KusciaJobConverter 中 SpotBugs 对 List<String>.add(String) 的 heuristic 误报 -->
+    <Match>
+        <Class name="org.secretflow.secretpad.service.graph.converter.KusciaJobConverter"/>
+        <Bug pattern="GC_UNRELATED_TYPES"/>
+    </Match>
+</FindBugsFilter>

@@ -1,0 +1,92 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  Copyright 2024 Ant Group Co., Ltd.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<module name="Checker">
+    <property name="charset" value="UTF-8"/>
+
+    <!-- 禁用 Tab 字符 -->
+    <module name="FileTabCharacter"/>
+
+    <!-- 行长度限制 -->
+    <!-- 注意：首次接入时历史代码存在大量长行，先放宽到 500，后续逐步收紧到 200 -->
+    <module name="LineLength">
+        <property name="max" value="500"/>
+    </module>
+
+    <module name="TreeWalker">
+        <!-- 禁止 import * -->
+        <!-- 历史代码中大量包使用 star import，一次性全部展开风险高且 diff 巨大； -->
+        <!-- 先对高频/生成类包保留 star import，后续再逐步收紧。 -->
+        <module name="AvoidStarImport">
+            <property name="excludes" value="
+                lombok,
+                lombok.extern.slf4j,
+                java.util,
+                java.util.concurrent,
+                java.io,
+                java.sql,
+                java.security,
+                java.lang.reflect,
+                jakarta.persistence,
+                jakarta.persistence.criteria,
+                jakarta.validation.constraints,
+                jakarta.servlet,
+                org.springframework.web.bind.annotation,
+                org.springframework.http,
+                org.secretflow.secretpad.persistence.repository,
+                org.secretflow.secretpad.persistence.entity,
+                org.secretflow.secretpad.persistence.model,
+                org.secretflow.secretpad.persistence.converter,
+                org.secretflow.secretpad.common.util,
+                org.secretflow.secretpad.common.errorcode,
+                org.secretflow.secretpad.common.enums,
+                org.secretflow.secretpad.common.constant,
+                org.secretflow.secretpad.common.constant.ComponentConstants,
+                org.secretflow.secretpad.common.constant.Constants,
+                org.secretflow.secretpad.common.constant.DeployModeConstants,
+                org.secretflow.secretpad.service.constant.ComponentConstants,
+                org.secretflow.secretpad.service.constant.TeeJobConstants,
+                org.secretflow.secretpad.service,
+                org.secretflow.secretpad.service.model.node,
+                org.secretflow.secretpad.service.model.datatable,
+                org.secretflow.secretpad.service.model.datasource,
+                org.secretflow.secretpad.service.model.project,
+                org.secretflow.secretpad.service.model.approval,
+                org.secretflow.secretpad.service.model.model,
+                org.secretflow.secretpad.service.model.message,
+                org.secretflow.secretpad.service.model.graph,
+                org.secretflow.secretpad.service.model.data,
+                org.secretflow.secretpad.service.model.model.export,
+                org.secretflow.secretpad.manager.integration.model,
+                org.secretflow.secretpad.kuscia.v1alpha1.service,
+                org.secretflow.secretpad.kuscia.v1alpha1.mock.service,
+                org.secretflow.v1alpha1.kusciaapi,
+                org.secretflow.v1alpha1.kusciaapi.DomainOuterClass,
+                io.grpc,
+                org.quartz,
+                okhttp3,
+                com.secretflow.spec.v1,
+                com.fasterxml.jackson.databind,
+                org.mockito,
+                org.mockito.ArgumentMatchers,
+                org.junit.jupiter.api.Assertions
+            "/>
+        </module>
+    </module>
+</module>

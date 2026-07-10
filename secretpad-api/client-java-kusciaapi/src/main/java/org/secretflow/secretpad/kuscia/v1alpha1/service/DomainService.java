@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.secretflow.secretpad.kuscia.v1alpha1.service;
 
 import org.secretflow.v1alpha1.kusciaapi.DomainOuterClass.*;

@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.secretflow.secretpad.service.impl;
 
 import org.secretflow.secretpad.common.constant.Constants;
@@ -1170,10 +1169,10 @@ public class GraphServiceImpl implements GraphService {
                             if (!nodeRouteInfoOptional.get().isSourceToDstIsAvailable()) {
                                 for (ParticipantNodeInstVO vo : participantNodeInstVOS) {
                                     if (vo.getInitiatorNodeId().equals(nodeRouteInfoOptional.get().getSourceNodeId())) {
-                                        if (vo.getInvitees().contains(entry.getKey())) {
+                                        if (vo.getInvitees().stream().map(ParticipantNodeInstVO.NodeInstVO::getInviteeId).anyMatch(id -> StringUtils.equals(id, entry.getKey()))) {
                                             throw SecretpadException.of(GraphErrorCode.GRAPH_NODE_ROUTE_NOT_EXISTS, party + "->" + entry.getKey());
                                         }
-                                    } else if (vo.getInvitees().contains(nodeRouteInfoOptional.get().getSourceNodeId())) {
+                                    } else if (vo.getInvitees().stream().map(ParticipantNodeInstVO.NodeInstVO::getInviteeId).anyMatch(id -> StringUtils.equals(id, nodeRouteInfoOptional.get().getSourceNodeId()))) {
                                         String initiatorNodeId = vo.getInitiatorNodeId();
                                         if (StringUtils.equals(initiatorNodeId, entry.getKey())) {
                                             throw SecretpadException.of(GraphErrorCode.GRAPH_NODE_ROUTE_NOT_EXISTS, party + "-> " + entry.getKey());

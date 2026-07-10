@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-//mvn test -pl secretpad-manager -Dtest=DatasourceManagerTest -DfailIfNoTests=false
 package org.secretflow.secretpad.manager.integration.node;
 
 import org.secretflow.secretpad.common.exception.SecretpadException;

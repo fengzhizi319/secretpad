@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.secretflow.secretpad.common.i18n;
 
 import org.secretflow.secretpad.common.errorcode.ErrorCode;
@@ -81,7 +80,7 @@ public class LocaleMessageResolver implements MessageResolver {
             locale = Locale.SIMPLIFIED_CHINESE;
         }
         String lang = locale.getLanguage();
-        if (Locale.SIMPLIFIED_CHINESE.getLanguage().equals(locale)) {
+        if (Locale.SIMPLIFIED_CHINESE.getLanguage().equals(lang)) {
             return Locale.SIMPLIFIED_CHINESE;
         } else if (Locale.US.getLanguage().equals(lang)) {
             return Locale.US;

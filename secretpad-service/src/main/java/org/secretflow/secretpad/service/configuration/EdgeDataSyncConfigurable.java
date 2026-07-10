@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.secretflow.secretpad.service.configuration;
 
 import org.secretflow.secretpad.persistence.datasync.buffer.DataSyncDataBufferTemplate;

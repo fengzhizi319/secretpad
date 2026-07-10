@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.secretflow.secretpad.service.handler.vote;
 
 import org.secretflow.secretpad.common.constant.CacheConstants;
@@ -64,7 +63,20 @@ public class ProjectCreateMessageHandler extends AbstractAutonomyVoteTypeHandler
     private final InstService instService;
 
 
-    public ProjectCreateMessageHandler(VoteInviteRepository voteInviteRepository, VoteRequestRepository voteRequestRepository, NodeRepository nodeRepository, InstRepository instRepository, EnvService envService, ProjectApprovalConfigRepository projectApprovalConfigRepository, ProjectRepository projectRepository, CertificateService certificateService, NodeManager nodeManager, ProjectNodeRepository projectNodeRepository, ProjectInstRepository projectInstRepository, CacheManager cacheManager, InstService instService) {
+    public ProjectCreateMessageHandler(
+        VoteInviteRepository voteInviteRepository,
+        VoteRequestRepository voteRequestRepository,
+        NodeRepository nodeRepository,
+        InstRepository instRepository,
+        EnvService envService,
+        ProjectApprovalConfigRepository projectApprovalConfigRepository,
+        ProjectRepository projectRepository,
+        CertificateService certificateService,
+        NodeManager nodeManager,
+        ProjectNodeRepository projectNodeRepository,
+        ProjectInstRepository projectInstRepository,
+        CacheManager cacheManager,
+        InstService instService) {
         super(voteInviteRepository, voteRequestRepository, nodeRepository, instRepository, envService, projectRepository, projectApprovalConfigRepository, nodeManager, certificateService);
         this.projectNodeRepository = projectNodeRepository;
         this.projectInstRepository = projectInstRepository;

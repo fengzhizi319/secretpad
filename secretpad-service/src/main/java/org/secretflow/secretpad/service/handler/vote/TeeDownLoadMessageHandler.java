@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.secretflow.secretpad.service.handler.vote;
 
 import org.secretflow.secretpad.common.errorcode.JobErrorCode;
@@ -73,7 +72,20 @@ public class TeeDownLoadMessageHandler extends AbstractVoteTypeHandler {
 
     private final EnvService envService;
 
-    public TeeDownLoadMessageHandler(VoteInviteRepository voteInviteRepository, VoteRequestRepository voteRequestRepository, NodeRepository nodeRepository, InstRepository instRepository, EnvService envService, TeeDownLoadAuditConfigRepository teeDownLoadAuditConfigRepository, ProjectDatatableRepository projectDatatableRepository, ProjectRepository projectRepository, ProjectNodeRepository projectNodeRepository, ProjectJobTaskRepository jobTaskRepository, ProjectService projectService, DatatableService datatableService, CertificateService certificateService) {
+    public TeeDownLoadMessageHandler(
+        VoteInviteRepository voteInviteRepository,
+        VoteRequestRepository voteRequestRepository,
+        NodeRepository nodeRepository,
+        InstRepository instRepository,
+        EnvService envService,
+        TeeDownLoadAuditConfigRepository teeDownLoadAuditConfigRepository,
+        ProjectDatatableRepository projectDatatableRepository,
+        ProjectRepository projectRepository,
+        ProjectNodeRepository projectNodeRepository,
+        ProjectJobTaskRepository jobTaskRepository,
+        ProjectService projectService,
+        DatatableService datatableService,
+        CertificateService certificateService) {
         super(voteInviteRepository, voteRequestRepository, nodeRepository, instRepository, envService, certificateService, projectRepository);
         this.teeDownLoadAuditConfigRepository = teeDownLoadAuditConfigRepository;
         this.projectDatatableRepository = projectDatatableRepository;
