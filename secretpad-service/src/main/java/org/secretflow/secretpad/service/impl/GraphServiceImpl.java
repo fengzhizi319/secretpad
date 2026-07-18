@@ -928,6 +928,16 @@ public class GraphServiceImpl implements GraphService {
         List<GraphContext.GraphParty> partyList = new ArrayList<>();
         Map<String, Set<String>> topNodes = findTopNodes(graphDO.getEdges(), selectedNodes);
         Map<String, Set<String>> parties = findParties(graphDO.getNodes(), topNodes, request.getProjectId(), partyList);
+        // Components without any data input (e.g. query_obfuscation) have no natural
+        // initiator. Fall back to the first node participating in the project so that
+        // Kuscia still receives a valid party for the job.
+        List<ProjectNodeDO> projectNodes = projectNodeRepository.findByProjectId(request.getProjectId());
+        String defaultInitiator = projectNodes.isEmpty() ? envServiceImpl.getPlatformNodeId() : projectNodes.get(0).getUpk().getNodeId();
+        parties.values().forEach(partySet -> {
+            if (CollectionUtils.isEmpty(partySet)) {
+                partySet.add(defaultInitiator);
+            }
+        });
         GraphContext.set(projectOpt.get(), GraphContext.GraphParties.builder().parties(partyList).build(), request.getBreakpoint());
         if (GraphContext.isTee()) {
             parties = new HashMap<>();
