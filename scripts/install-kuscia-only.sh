@@ -400,9 +400,9 @@ check_and_init
 # Patch deployment helpers to be non-TTY friendly, so this script can run
 # from automation, IDEs, nohup or other environments without a controlling terminal.
 echo -e "${GREEN}[INFO]${NC} patching deployment scripts to run without TTY"
-find "$I_PATH/deploy" -type f -name "*.sh" -exec sed -i 's/docker run -it --rm/docker run -i --rm/g; s/docker run -itd/docker run -id/g; s/docker exec -it/docker exec -i/g' {} +
-sed -i 's/docker run -it --rm/docker run -i --rm/g; s/docker run -itd/docker run -id/g; s/docker exec -it/docker exec -i/g' "$I_PATH/kuscia.sh"
-sed -i 's/docker run -it --rm/docker run -i --rm/g; s/docker run -itd/docker run -id/g; s/docker exec -it/docker exec -i/g' "$I_PATH/register_app_image_0.sh"
+find "$I_PATH/deploy" -type f -name "*.sh" -exec sed -i.bak 's/docker run -it --rm/docker run -i --rm/g; s/docker run -itd/docker run -id/g; s/docker exec -it/docker exec -i/g' {} + && find "$I_PATH/deploy" -type f -name "*.bak" -delete
+sed -i.bak 's/docker run -it --rm/docker run -i --rm/g; s/docker run -itd/docker run -id/g; s/docker exec -it/docker exec -i/g' "$I_PATH/kuscia.sh" && rm -f "$I_PATH/kuscia.sh.bak"
+sed -i.bak 's/docker run -it --rm/docker run -i --rm/g; s/docker run -itd/docker run -id/g; s/docker exec -it/docker exec -i/g' "$I_PATH/register_app_image_0.sh" && rm -f "$I_PATH/register_app_image_0.sh.bak"
 
 # In non-interactive environments (e.g. IDEs, nohup) default the k3s-data prompt to "n"
 PATH_KUSCIA_SH="$I_PATH/kuscia.sh" python3 - <<'PY'
@@ -488,8 +488,8 @@ import os
 path = os.environ['PATH_KUSCIA_SH']
 with open(path, 'r') as f:
     content = f.read()
-old_line = "docker run --rm $KUSCIA_IMAGE cat ${CTR_ROOT}/scripts/deploy/register_app_image.sh > ${DOMAIN_WORK_DIR}/register_app_image.sh && chmod u+x ${DOMAIN_WORK_DIR}/register_app_image.sh"
-new_lines = old_line + "\nsed -i 's/docker exec -it/docker exec -i/g' ${DOMAIN_WORK_DIR}/register_app_image.sh"
+old_line = 'docker run --rm $KUSCIA_IMAGE cat ${CTR_ROOT}/scripts/deploy/register_app_image.sh > ${DOMAIN_WORK_DIR}/register_app_image.sh && chmod u+x ${DOMAIN_WORK_DIR}/register_app_image.sh'
+new_lines = old_line + '\n    sed -i.bak "s/docker exec -it/docker exec -i/g" "${DOMAIN_WORK_DIR}/register_app_image.sh" && rm -f "${DOMAIN_WORK_DIR}/register_app_image.sh.bak"'
 if old_line not in content:
     raise RuntimeError("Could not find register_app_image.sh copy line in kuscia.sh")
 content = content.replace(old_line, new_lines)

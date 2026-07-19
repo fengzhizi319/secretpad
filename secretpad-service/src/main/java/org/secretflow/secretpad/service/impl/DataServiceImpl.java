@@ -44,6 +44,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
@@ -128,7 +129,7 @@ public class DataServiceImpl implements DataService {
         String fileName = file.getOriginalFilename();
         fileNameCheck(fileName);
         nodeIdValidCheck(nodeId);
-        String dirPath = storeDir + nodeId + FILE_SEPETATOR;
+        String dirPath = Path.of(storeDir, nodeId).toString() + FILE_SEPETATOR;
         String randomFileName = null;
         File target = null;
         // 最多重试 5 次生成随机文件名，避免极低概率的命名冲突
@@ -228,7 +229,7 @@ public class DataServiceImpl implements DataService {
         NodeResultDTO nodeResult = nodeManager.getNodeResult(request.getNodeId(), request.getDomainDataId());
         String relativeUri = nodeResult.getRelativeUri();
         relativeUriValidCheck(relativeUri);
-        String dirPath = storeDir + request.getNodeId();
+        String dirPath = Path.of(storeDir, request.getNodeId()).toString();
         String dir = dirPath + FILE_SEPETATOR;
         String filePath = dir + relativeUri;
         File f = new File(filePath);
