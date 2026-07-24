@@ -172,16 +172,21 @@ management:
       enabled: false                                   # 禁用远程关闭端点，防止误操作导致服务中断
     health:
       show-details: always                             # 始终显示详细健康信息（包括数据库连接状态等）
+    prometheus:
+      enabled: true                                    # 启用 Prometheus 指标端点
   endpoints:
     web:
       exposure:
         include:
-          # prometheus monitoring indicator interface does not have security protection. If you need to use it, please inject security protection. It is best to use an intranet environment.
-          #          - prometheus                      # Prometheus 监控指标接口（已注释，无安全防护，仅在内网使用）
+          - prometheus                                 # Prometheus 监控指标接口 /actuator/prometheus
           - health                                     # 暴露健康检查端点 /actuator/health
+          - metrics                                    # 指标列表端点 /actuator/metrics
   metrics:
     tags:
       application: ${spring.application.name}          # 监控指标标签：应用名称，便于在 Grafana 等工具中区分
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true                     # 启用 HTTP 请求延迟直方图
 
 # ------------------------------------------------------------
 # Kuscia API 通信协议配置
