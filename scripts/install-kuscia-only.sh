@@ -599,10 +599,19 @@ function add_kuscia_domain_lite() {
 function add_alice_bob_data() {
 	docker exec -i "${USER}"-kuscia-master scripts/deploy/create_domaindata_alice_table.sh alice
 	docker exec -i "${USER}"-kuscia-master scripts/deploy/create_domaindata_bob_table.sh bob
+	# register privacy component test data
+	docker exec -i "${USER}"-kuscia-master scripts/deploy/create_domaindata_alice_privacy_table.sh alice
+	docker exec -i "${USER}"-kuscia-master scripts/deploy/create_domaindata_bob_privacy_table.sh bob
 	docker run --rm "$KUSCIA_IMAGE" cat /home/kuscia/var/storage/data/alice.csv >"$INSTALL_DIR"/"$PAD_MASTER"/"$PAD_DATA"/alice/alice.csv
 	docker run --rm "$KUSCIA_IMAGE" cat /home/kuscia/var/storage/data/bob.csv >"${KUSCIA_INSTALL_DIR}"/bob.csv
+	# copy privacy component test data from image
+	docker run --rm "$KUSCIA_IMAGE" cat /home/kuscia/var/storage/data/alice_privacy.csv >"$INSTALL_DIR"/"$PAD_MASTER"/"$PAD_DATA"/alice/alice_privacy.csv 2>/dev/null || true
+	docker run --rm "$KUSCIA_IMAGE" cat /home/kuscia/var/storage/data/bob_privacy.csv >"${KUSCIA_INSTALL_DIR}"/bob_privacy.csv 2>/dev/null || true
 	docker exec -i "${USER}"-kuscia-lite-alice curl https://127.0.0.1:8070/api/v1/datamesh/domaindatagrant/create -X POST -H 'content-type: application/json' -d '{"author":"alice","domaindata_id":"alice-table","grant_domain":"bob"}' --cacert var/certs/ca.crt --cert var/certs/ca.crt --key var/certs/ca.key
 	docker exec -i "${USER}"-kuscia-lite-bob curl https://127.0.0.1:8070/api/v1/datamesh/domaindatagrant/create -X POST -H 'content-type: application/json' -d '{"author":"bob","domaindata_id":"bob-table","grant_domain":"alice"}' --cacert var/certs/ca.crt --cert var/certs/ca.crt --key var/certs/ca.key
+	# grant privacy tables cross-domain access
+	docker exec -i "${USER}"-kuscia-lite-alice curl https://127.0.0.1:8070/api/v1/datamesh/domaindatagrant/create -X POST -H 'content-type: application/json' -d '{"author":"alice","domaindata_id":"alice-privacy-table","grant_domain":"bob"}' --cacert var/certs/ca.crt --cert var/certs/ca.crt --key var/certs/ca.key 2>/dev/null || true
+	docker exec -i "${USER}"-kuscia-lite-bob curl https://127.0.0.1:8070/api/v1/datamesh/domaindatagrant/create -X POST -H 'content-type: application/json' -d '{"author":"bob","domaindata_id":"bob-privacy-table","grant_domain":"alice"}' --cacert var/certs/ca.crt --cert var/certs/ca.crt --key var/certs/ca.key 2>/dev/null || true
 }
 
 function del_alice_bob_dp_table() {
