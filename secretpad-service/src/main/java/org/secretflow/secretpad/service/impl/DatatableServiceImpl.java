@@ -221,7 +221,7 @@ public class DatatableServiceImpl implements DatatableService {
      */
     private List<String> getNodeIds(String instId, List<String> nodeNameFilter) {
         List<NodeDTO> nodeDTOS = nodeManager.listReadyNodeByNames(instId, nodeNameFilter);
-        return nodeDTOS.stream().map(NodeDTO::getNodeId).toList();
+        return nodeDTOS.stream().map(NodeDTO::getNodeId).distinct().toList();
     }
 
     /**
