@@ -23,6 +23,10 @@
 | 平台类型路由守卫 | route guards | `features/auth/ui/access-guard.tsx` | auth-store 中 platformType | ✅ |
 | 按钮级权限 | AccessControl | `features/auth/ui/access-guard.tsx` | `useHasAccess` + `AccessGuard` | ✅ |
 | 中英双语切换 | Locale Switch | `widgets/AppHeader` + `shared/lib/i18n` | 本地字典 | ✅ |
+| 模型产物列表 / 删除 / 详情 | Model Manager | `pages/models` | `model/page`, `model/delete`, `model/info`, `model/serving/*` | ✅ |
+| 消息与审批列表 | Message Center | `pages/messages` | `message/list`, `message/pending` | ✅ |
+| 周期任务列表 / 下线 / 删除 | Periodic Tasks | `pages/periodic-tasks` | `scheduled/page`, `scheduled/offline`, `scheduled/del` | ✅ |
+| DAG 图列表 / 创建 / 删除 / 运行 | DAG Editor | `pages/dag` | `graph/*`, `component/list` | ✅ |
 
 ## 3. 自动化验证
 
@@ -60,6 +64,7 @@ corepack pnpm exec playwright test
 当前 E2E 覆盖：
 - 登录成功并进入 Dashboard
 - 侧边栏导航至 Nodes 页面
+- 侧边栏导航至 Messages 页面
 
 后续随功能迭代继续补充 Projects / DataSources / DataTables 的创建-删除闭环 E2E。
 
@@ -83,6 +88,7 @@ corepack pnpm exec playwright test
 
 ## 6. 已知限制与后续阶段
 
-- DAG 画布、模型管理、周期任务、消息中心当前为占位页面，需按后端接口逐步补齐。
+- 所有一级页面已接入真实接口，DAG 画布目前支持按项目加载图、展示节点与运行；复杂算子配置、节点拖拽保存、运行时日志需后续逐步增强。
 - 节点 Token 弹窗目前仅展示，未提供复制按钮；后续可基于 `navigator.clipboard` 增强。
 - 数据表导入当前使用简单的 `name:type` Schema 输入，后续可接入数据源自动拉取元数据。
+- 模型部署、周期任务创建等流程需配合 DAG 训练/打包结果，当前以提示引导用户先完成 DAG 运行。

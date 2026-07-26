@@ -177,3 +177,112 @@ export const CreateDataTableInputSchema = z.object({
   desc: z.string().max(100).optional(),
 });
 export type CreateDataTableInput = z.infer<typeof CreateDataTableInputSchema>;
+
+
+// Model / Serving Schema (from /api/v1alpha1/model/*)
+export const ModelPackVOSchema = z.object({
+  gmtCreate: z.string().optional(),
+  modelDesc: z.string().optional(),
+  modelId: z.string().optional(),
+  modelName: z.string().optional(),
+  modelStats: z.string().optional(),
+  ownerId: z.string().optional(),
+  servingId: z.string().optional(),
+});
+export type ModelPackVO = z.infer<typeof ModelPackVOSchema>;
+
+export const ServingDetailSchema = z.object({
+  endpoints: z.string().optional(),
+  featureHttp: z.string().optional(),
+  featureMappings: z.record(z.string()).optional(),
+  isMock: z.boolean().optional(),
+  nodeId: z.string().optional(),
+  nodeName: z.string().optional(),
+  sourcePath: z.string().optional(),
+});
+export type ServingDetail = z.infer<typeof ServingDetailSchema>;
+
+export const ModelPackInfoVOSchema = z.object({
+  modelStats: z.string().optional(),
+  servingDetails: z.array(ServingDetailSchema).optional(),
+});
+export type ModelPackInfoVO = z.infer<typeof ModelPackInfoVOSchema>;
+
+// Message Schema (from /api/v1alpha1/message/*)
+export const MessageVOSchema = z.object({
+  createTime: z.string().optional(),
+  messageName: z.string().optional(),
+  status: z.string().optional(),
+  type: z.string().optional(),
+  voteID: z.string().optional(),
+});
+export type MessageVO = z.infer<typeof MessageVOSchema>;
+
+// Scheduled / Periodic Task Schema (from /api/v1alpha1/scheduled/*)
+export const PageScheduledVOSchema = z.object({
+  createTime: z.string().optional(),
+  creator: z.string().optional(),
+  owner: z.string().optional(),
+  ownerName: z.string().optional(),
+  scheduleDesc: z.string().optional(),
+  scheduleId: z.string().optional(),
+  scheduleStats: z.string().optional(),
+  taskRunning: z.boolean().optional(),
+});
+export type PageScheduledVO = z.infer<typeof PageScheduledVOSchema>;
+
+// Graph / DAG Schema (from /api/v1alpha1/graph/*)
+export const GraphMetaVOSchema = z.object({
+  graphId: z.string().optional(),
+  name: z.string().optional(),
+  ownerId: z.string().optional(),
+  projectId: z.string().optional(),
+});
+export type GraphMetaVO = z.infer<typeof GraphMetaVOSchema>;
+
+export const GraphNodeDetailSchema = z.object({
+  graphNodeId: z.string().optional(),
+  codeName: z.string().optional(),
+  label: z.string().optional(),
+  status: z.string().optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  progress: z.number().optional(),
+});
+export type GraphNodeDetail = z.infer<typeof GraphNodeDetailSchema>;
+
+export const GraphEdgeSchema = z.object({
+  edgeId: z.string().optional(),
+  source: z.string().optional(),
+  target: z.string().optional(),
+  sourceAnchor: z.string().optional(),
+  targetAnchor: z.string().optional(),
+});
+export type GraphEdge = z.infer<typeof GraphEdgeSchema>;
+
+export const GraphDetailVOSchema = z.object({
+  graphId: z.string().optional(),
+  name: z.string().optional(),
+  projectId: z.string().optional(),
+  nodes: z.array(GraphNodeDetailSchema).default([]),
+  edges: z.array(GraphEdgeSchema).default([]),
+  maxParallelism: z.number().optional(),
+});
+export type GraphDetailVO = z.infer<typeof GraphDetailVOSchema>;
+
+// Component Schema (from /api/v1alpha1/component/*)
+export const ComponentSummaryDefSchema = z.object({
+  desc: z.string().optional(),
+  domain: z.string().optional(),
+  name: z.string().optional(),
+  version: z.string().optional(),
+});
+export type ComponentSummaryDef = z.infer<typeof ComponentSummaryDefSchema>;
+
+export const CompListVOSchema = z.object({
+  name: z.string().optional(),
+  version: z.string().optional(),
+  desc: z.string().optional(),
+  comps: z.array(ComponentSummaryDefSchema).optional(),
+});
+export type CompListVO = z.infer<typeof CompListVOSchema>;

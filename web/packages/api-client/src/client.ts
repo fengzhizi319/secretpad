@@ -13,6 +13,13 @@ import {
   CreateDataTableInput,
   DataTableColumn,
   BackendTableColumn,
+  ModelPackVO,
+  ModelPackInfoVO,
+  MessageVO,
+  PageScheduledVO,
+  GraphMetaVO,
+  GraphDetailVO,
+  CompListVO,
 } from './schemas';
 
 type SecretPadResponse<T> = {
@@ -344,5 +351,143 @@ export const apiClient = {
     return jobs
       .sort((a, b) => new Date(b.createTime || 0).getTime() - new Date(a.createTime || 0).getTime())
       .slice(0, limit);
+  },
+
+  async getModels(projectId: string, page = 1, size = 100): Promise<ModelPackVO[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/page', {
+      body: { projectId, page, size } as components['schemas']['QueryModelPageRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(data as unknown as SecretPadResponse<{ modelPacks?: ModelPackVO[]; list?: ModelPackVO[] }>);
+    return payload.modelPacks || payload.list || [];
+  },
+
+  async getModelInfo(modelId: string, projectId: string): Promise<ModelPackInfoVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/info', {
+      body: { modelId, projectId } as components['schemas']['QueryModelDetailRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<ModelPackInfoVO>);
+  },
+
+  async deleteModel(modelId: string, nodeId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/delete', {
+      body: { modelId, nodeId } as components['schemas']['DeleteModelPackRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrap(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async createModelServing(input: { modelId: string; projectId: string }): Promise<{ servingId?: string }> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/serving/create', {
+      body: input as components['schemas']['CreateModelServingRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<{ servingId?: string }>);
+  },
+
+  async deleteModelServing(servingId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/serving/delete', {
+      body: { servingId } as components['schemas']['DeleteModelServingRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrap(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getMessages(ownerId: string, page = 1, size = 100): Promise<MessageVO[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/message/list', {
+      body: { ownerId, page, size } as components['schemas']['MessageListRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(data as unknown as SecretPadResponse<{ messages?: MessageVO[]; list?: MessageVO[] }>);
+    return payload.messages || payload.list || [];
+  },
+
+  async getPendingMessageCount(ownerId: string): Promise<number> {
+    const { data, error } = await api.POST('/api/v1alpha1/message/pending', {
+      body: { ownerId } as components['schemas']['MessagePendingCountRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const count = unwrap(data as unknown as SecretPadResponse<number | string>);
+    return Number(count) || 0;
+  },
+
+  async getScheduledTasks(projectId: string, page = 1, size = 100): Promise<PageScheduledVO[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/page', {
+      body: { projectId, page, size } as components['schemas']['PageScheduledRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(data as unknown as SecretPadResponse<{ list?: PageScheduledVO[] }>);
+    return payload.list || [];
+  },
+
+  async offlineScheduledTask(scheduleId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/offline', {
+      body: { scheduleId } as components['schemas']['ScheduledOfflineRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrap(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async deleteScheduledTask(scheduleId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/del', {
+      body: { scheduleId } as components['schemas']['ScheduledDelRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrap(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getGraphs(projectId: string): Promise<GraphMetaVO[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/list', {
+      body: { projectId } as components['schemas']['ListGraphRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<GraphMetaVO[]>);
+  },
+
+  async getGraphDetail(projectId: string, graphId: string): Promise<GraphDetailVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/detail', {
+      body: { projectId, graphId } as components['schemas']['GetGraphRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<GraphDetailVO>);
+  },
+
+  async createGraph(input: { projectId: string; name: string; nodes?: any[]; edges?: any[] }): Promise<string> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/create', {
+      body: {
+        projectId: input.projectId,
+        name: input.name,
+        nodes: input.nodes || [],
+        edges: input.edges || [],
+      } as components['schemas']['CreateGraphRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const created = unwrap(data as unknown as SecretPadResponse<{ graphId?: string }>);
+    return created.graphId || String(Date.now());
+  },
+
+  async deleteGraph(projectId: string, graphId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/delete', {
+      body: { projectId, graphId } as components['schemas']['DeleteGraphRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrap(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async startGraph(projectId: string, graphId: string, nodes: string[]): Promise<string> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/start', {
+      body: { projectId, graphId, nodes } as components['schemas']['StartGraphRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const res = unwrap(data as unknown as SecretPadResponse<{ jobId?: string }>);
+    return res.jobId || '';
+  },
+
+  async getComponents(): Promise<CompListVO[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/component/list', { body: {} as any });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(data as unknown as SecretPadResponse<CompListVO[]>);
+    return payload || [];
   },
 };

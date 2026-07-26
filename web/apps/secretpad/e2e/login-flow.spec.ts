@@ -45,4 +45,18 @@ test.describe('SecretPad P0 Login & Dashboard', () => {
     await page.getByRole('button', { name: /Nodes/i }).click();
     await expect(page.locator('h2')).toContainText('Kuscia Node Cluster');
   });
+
+  test('navigates to Messages page after login', async ({ page }) => {
+    await page.goto('/');
+    await page.getByLabel('Username').fill('admin');
+    await page.getByLabel('Password').fill('12345678');
+    await page.getByRole('button', { name: /Sign In/i }).click();
+
+    // Wait for dashboard
+    await expect(page.locator('h1')).toContainText('Console Dashboard');
+
+    // Click Messages in sidebar
+    await page.getByRole('button', { name: /Messages/i }).click();
+    await expect(page.locator('h2')).toContainText('Message & Approval Center');
+  });
 });
