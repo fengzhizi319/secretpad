@@ -37,6 +37,7 @@ import org.springframework.util.CollectionUtils;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -240,6 +241,16 @@ public class DatatableManager extends AbstractDatatableManager {
         if (!CollectionUtils.isEmpty(featureTableDTOList)) {
             datatableDTOList.addAll(featureTableDTOList);
         }
+        // DomainData 与 HTTP feature table 可能出现相同 datatableId，按 datatableId 去重并保留第一个（DomainData）
+        datatableDTOList = datatableDTOList.stream()
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toMap(DatatableDTO::getDatatableId, Function.identity(),
+                                (existing, replacement) -> {
+                                    LOGGER.warn("Duplicate datatableId {} found for node {}, keep the first one.",
+                                            existing.getDatatableId(), nodeId);
+                                    return existing;
+                                }, LinkedHashMap::new),
+                        map -> new ArrayList<>(map.values())));
         LOGGER.info("The datatable list len = {}, now filter by status = {}", datatableDTOList.size(), statusFilter);
         datatableDTOList = filterByStatus(datatableDTOList, statusFilter);
         LOGGER.info("After filter by status the datatable list len = {}, now filter by datatable name = {}", datatableDTOList.size(), datatableNameFilter);
