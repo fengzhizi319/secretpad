@@ -1,0 +1,24 @@
+{
+  "name": "@secretpad/monorepo",
+  "private": true,
+  "version": "3.0.0",
+  "scripts": {
+    "dev": "pnpm --filter @secretpad/app dev",
+    "build": "pnpm --filter \"@secretpad/*\" build",
+    "typecheck": "pnpm --filter \"@secretpad/*\" typecheck",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf node_modules apps/*/.vite apps/*/dist packages/*/dist"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "^29.1.1",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.4.5",
+    "vitest": "^2.1.9"
+  },
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

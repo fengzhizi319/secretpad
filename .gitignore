@@ -84,6 +84,18 @@ docs/_build
 scripts/config/certs/
 frontend-src/
 
+### New Vite frontend (secretpad/web) ###
+/web/node_modules/
+/web/apps/*/.vite/
+/web/apps/*/dist/
+/web/packages/*/dist/
+/web/.turbo/
+/web/tsconfig.tsbuildinfo
+/web/**/tsconfig.tsbuildinfo
+
+### Backend static resources (populated by build.sh) ###
+/secretpad-web/src/main/resources/static/
+
 ### Kuscia local deployment runtime artifacts ###
 logs/
 scripts/kuscia.sh
