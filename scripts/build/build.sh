@@ -47,66 +47,48 @@ if [[ $WITH_FRONTEND_FLAG == "" ]]; then
 fi
 
 # ----------------------------------------------------------------------------
-# 步骤2: 如果需要集成前端，则下载并解压预编译的前端产物
+# 步骤2: 如果需要集成前端，则本地构建 secretpad/web 并复制产物到后端 static 目录
 # ----------------------------------------------------------------------------
-# 前端与后端采用分离式架构：
-#   - 前端代码在独立仓库维护（https://github.com/fengzhizi319/secretpad-frontend.git）
-#   - 前端构建产物以 tar 包形式发布到 OSS
-#   - 后端构建时动态下载最新版本的tar包并解压到 static 目录
+# 前端与后端采用同仓并列隔离（Monorepo）架构：
+#   - 前端代码位于 secretpad/web/，与后端同仓库但独立构建
+#   - 生产打包时先在前端目录执行 pnpm build，再把 dist/* 复制到
+#     secretpad-web/src/main/resources/static/
 #   - Spring Boot 会自动将 src/main/resources/static 下的文件作为静态资源服务
 if [[ $WITH_FRONTEND_FLAG == true ]]; then
 	# 2.1 获取项目根目录的绝对路径
-	# ${BASH_SOURCE[0]} 是当前脚本的路径
-	# dirname 获取脚本所在目录，cd ../../ 回到项目根目录
 	ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../" && pwd -P)
-	
-	# 2.2 查询前端仓库的最新版本标签（tag）
-	# git ls-remote --refs --tags: 列出远程仓库的所有标签引用
-	# --sort='version:refname': 按版本号排序（支持语义化版本）
-	# tail -n1: 取最后一个（即最新版本）
-	# sed 's/.*\///': 提取标签名（去除 refs/tags/ 前缀）
-	FRONTEND_LATEST_TAG=$(git ls-remote --sort='version:refname' --refs --tags https://github.com/fengzhizi319/secretpad-frontend.git | tail -n1 | sed 's/.*\///')
-	
-	# 2.3 创建工作目录用于临时存放前端文件
-	WORK_DIR="./tmp/frontend"
-	mkdir -p $WORK_DIR
-	
-	# 2.4 从阿里云 OSS 下载前端预编译产物
-	# OSS 地址: https://secretflow-public.oss-cn-hangzhou.aliyuncs.com/secretpad-frontend/
-	# 文件名格式: {TAG}.tar（例如: v1.0.0.tar）
-	# 优势: 
-	#   - 避免在前端源码纳入后端仓库，保持仓库轻量化
-	#   - 前端可以独立发布，后端只需引用对应版本
-	#   - 利用 CDN 加速下载
-	wget -O $WORK_DIR/frontend.tar https://secretflow-public.oss-cn-hangzhou.aliyuncs.com/secretpad-frontend/"${FRONTEND_LATEST_TAG}".tar
-	
-	# 2.5 解压前端 tar 包
-	# -xvf: 解压并显示详细过程
-	# -C ${WORK_DIR}: 指定解压目标目录
-	# --strip-components=1: 去除压缩包内第一层目录结构
-	#   例如: archive/apps/platform/dist -> apps/platform/dist
-	tar -xvf $WORK_DIR/frontend.tar -C ${WORK_DIR} --strip-components=1
-	
-	# 2.6 定位前端构建产物的输出目录
-	# frontend-src 是 Monorepo 结构，platform 是主应用
-	# dist 目录包含 Vite/Webpack 构建后的静态文件（HTML、CSS、JS等）
-	DIST_DIR="$WORK_DIR/apps/platform/dist"
-	
-	# 2.7 确定后端静态资源目标目录
-	# Spring Boot 约定: src/main/resources/static 下的文件可通过 / 路径访问
-	# 例如: static/index.html 可通过 http://localhost:8080/ 访问
+
+	# 2.2 前端工程目录与产物目录
+	FRONTEND_DIR="${FRONTEND_DIR:-${ROOT}/web}"
+	DIST_DIR="${FRONTEND_DIR}/apps/secretpad/dist"
 	TARGET_DIR="${ROOT}/secretpad-web/src/main/resources/static"
+
+	if [[ ! -d "${FRONTEND_DIR}" ]]; then
+		echo "[ERROR] 前端工程目录不存在: ${FRONTEND_DIR}"
+		exit 1
+	fi
+
+	if ! command -v corepack >/dev/null 2>&1; then
+		echo "[ERROR] 未找到 corepack，无法安装/执行 pnpm"
+		exit 1
+	fi
+
+	echo "[INFO] 正在本地构建前端: ${FRONTEND_DIR} ..."
+	(
+		cd "${FRONTEND_DIR}"
+		corepack pnpm install
+		corepack pnpm run build
+	)
+
+	if [[ ! -d "${DIST_DIR}" ]]; then
+		echo "[ERROR] 前端构建产物目录不存在: ${DIST_DIR}"
+		exit 1
+	fi
+
+	echo "[INFO] 复制前端产物到 ${TARGET_DIR} ..."
 	mkdir -p "${TARGET_DIR}"
-	
-	# 2.8 复制前端构建产物到后端静态资源目录
-	# -r: 递归复制目录
-	# -p: 保留文件属性（权限、时间戳）
-	# -f: 强制覆盖已存在的文件
-	cp -rpf $DIST_DIR/* "${TARGET_DIR}"
-	
-	# 2.9 清理临时工作目录
-	# 避免残留文件占用磁盘空间
-	rm -rf "$WORK_DIR"
+	rm -rf "${TARGET_DIR:?}"/*
+	cp -rpf "${DIST_DIR}"/* "${TARGET_DIR}/"
 fi
 
 # ----------------------------------------------------------------------------
