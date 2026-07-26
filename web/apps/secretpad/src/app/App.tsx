@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../features/auth/model/auth-store';
 import { AppSidebar } from '../widgets/AppSidebar';
 import { AppHeader } from '../widgets/AppHeader';
@@ -15,8 +15,22 @@ import { PeriodicTasksPage } from '../pages/periodic-tasks';
 import { MessagesPage } from '../pages/messages';
 
 export const App: React.FC = () => {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, rehydrate } = useAuthStore();
+  const [hydrated, setHydrated] = useState(false);
   const [currentPath, setCurrentPath] = useState('/dashboard');
+
+  useEffect(() => {
+    rehydrate();
+    setHydrated(true);
+  }, [rehydrate]);
+
+  if (!hydrated) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-50 dark:bg-gray-950 text-gray-500 text-sm">
+        Loading...
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginPage onLoginSuccess={() => setCurrentPath('/dashboard')} />;

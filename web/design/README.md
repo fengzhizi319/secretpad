@@ -13,6 +13,7 @@
 | [02-架构设计方案.md](./02-架构设计方案.md) | 最终架构设计方案、技术选型、分层规范与迁移路线 | 2 |
 | [03-工程目录结构.md](./03-工程目录结构.md) | 完整目录结构（apps/packages/tooling）与依赖规则 | 3 |
 | [04-UI设计图.html](./04-UI设计图.html) | 交互式 HTML 设计图：Dashboard + DAG 画布 + 架构图 | 4 |
+| [迁移一致性保障指南](../docs/frontend-migration-consistency.md) | 旧前端功能/接口迁移到新前端的验证策略与 checklist | 5 |
 
 ---
 

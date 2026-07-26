@@ -6,26 +6,48 @@ export const ProjectsPage: React.FC<{ onNavigate: (path: string) => void }> = ({
   const [projects, setProjects] = useState<Project[]>([]);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   // New Project Form
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [computeMode, setComputeMode] = useState<'MPC' | 'FL' | 'TEE' | 'HE'>('FL');
 
   useEffect(() => {
-    apiClient.getProjects().then(setProjects);
+    apiClient.getProjects()
+      .then(setProjects)
+      .catch((e) => setError(e.message));
   }, []);
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newProj = await apiClient.createProject({ name, description, computeMode, nodes: ['alice', 'bob'] });
-    setProjects([newProj, ...projects]);
-    setIsModalOpen(false);
-    setName('');
-    setDescription('');
+    setLoading(true);
+    setError(null);
+    try {
+      const newProj = await apiClient.createProject({
+        projectName: name,
+        description,
+        computeMode,
+        nodes: [],
+      });
+      setProjects([newProj, ...projects]);
+      setIsModalOpen(false);
+      setName('');
+      setDescription('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Create project failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredProjects = projects.filter((p) =>
+    (p.projectName || p.name || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const projectNodeNames = (project: Project) =>
+    project.nodes.map((n) => n.nodeName || n.nodeId).join(', ');
 
   return (
     <div className="space-y-6">
@@ -49,6 +71,12 @@ export const ProjectsPage: React.FC<{ onNavigate: (path: string) => void }> = ({
         </div>
       </div>
 
+      {error && (
+        <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg px-4 py-2">
+          API Error: {error}
+        </div>
+      )}
+
       {/* Project Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredProjects.map((project) => (
@@ -63,14 +91,16 @@ export const ProjectsPage: React.FC<{ onNavigate: (path: string) => void }> = ({
                 </Badge>
               </div>
 
-              <h3 className="font-bold text-base text-gray-900 dark:text-gray-100 mb-1.5">{project.name}</h3>
+              <h3 className="font-bold text-base text-gray-900 dark:text-gray-100 mb-1.5">{project.projectName}</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-4">{project.description || 'No description'}</p>
             </div>
 
             <div className="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs">
               <div className="flex items-center gap-1 text-gray-500">
                 <span>Joined Nodes:</span>
-                <span className="font-semibold text-gray-700 dark:text-gray-300">{project.nodes.join(', ')}</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                  {projectNodeNames(project) || '-'}
+                </span>
               </div>
               <Button size="sm" variant="ghost" onClick={() => onNavigate('/dag')}>
                 Open DAG Editor →
@@ -80,6 +110,10 @@ export const ProjectsPage: React.FC<{ onNavigate: (path: string) => void }> = ({
         ))}
       </div>
 
+      {filteredProjects.length === 0 && !error && (
+        <div className="text-center text-xs text-gray-400 py-10">No projects found</div>
+      )}
+
       {/* Create Project Modal */}
       <Modal
         isOpen={isModalOpen}
@@ -88,7 +122,7 @@ export const ProjectsPage: React.FC<{ onNavigate: (path: string) => void }> = ({
         footer={
           <>
             <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleCreateProject}>Create Project</Button>
+            <Button variant="primary" onClick={handleCreateProject} loading={loading}>Create Project</Button>
           </>
         }
       >

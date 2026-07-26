@@ -5,12 +5,22 @@ import { Button, Card } from '@secretpad/design-system';
 export const LoginPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('12345678');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { login } = useAuthStore();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(username);
-    onLoginSuccess();
+    setLoading(true);
+    setError(null);
+    try {
+      await login(username, password);
+      onLoginSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -26,8 +36,9 @@ export const LoginPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuc
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase">Username</label>
+            <label htmlFor="username" className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase">Username</label>
             <input
+              id="username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -37,8 +48,9 @@ export const LoginPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuc
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase">Password</label>
+            <label htmlFor="password" className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase">Password</label>
             <input
+              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -47,8 +59,14 @@ export const LoginPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuc
             />
           </div>
 
+          {error && (
+            <div className="text-xs text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
           <div className="pt-2">
-            <Button variant="primary" size="lg" className="w-full shadow-lg shadow-blue-600/30">
+            <Button variant="primary" size="lg" className="w-full shadow-lg shadow-blue-600/30" loading={loading}>
               Sign In to Console
             </Button>
           </div>

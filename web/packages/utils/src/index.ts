@@ -2,6 +2,8 @@
  * SecretPad Shared Utilities Package
  */
 
+export * from './crypto';
+
 // Formatters
 export function formatDate(date: Date | string | number, format = 'YYYY-MM-DD HH:mm:ss'): string {
   const d = new Date(date);

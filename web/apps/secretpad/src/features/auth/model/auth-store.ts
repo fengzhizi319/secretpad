@@ -1,38 +1,70 @@
 import { create } from 'zustand';
-import { User, Platform } from '@secretpad/api-client';
+import { sha256 } from '@secretpad/utils';
+import { apiClient, User, Platform } from '@secretpad/api-client';
 
 interface AuthState {
   user: User | null;
   platform: Platform;
   isAuthenticated: boolean;
   theme: 'light' | 'dark';
-  login: (name: string, role?: 'ADMIN' | 'DEVELOPER') => void;
-  logout: () => void;
+  rehydrate: () => void;
+  login: (name: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   toggleTheme: () => void;
 }
 
+function getStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem('secretpad-user');
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildPlatform(user: User | null): Platform {
+  return {
+    platformType: (user?.platformType as Platform['platformType']) || 'CENTER',
+    nodeId: user?.platformNodeId || user?.ownerId || '',
+  };
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: {
-    ownerId: 'admin-001',
-    name: 'admin',
-    role: 'ADMIN',
-    token: 'mock-jwt-token-secretpad',
-  },
-  platform: {
-    platformType: 'CENTER',
-    nodeId: 'alice',
-  },
-  isAuthenticated: true,
+  user: getStoredUser(),
+  platform: buildPlatform(getStoredUser()),
+  isAuthenticated: !!localStorage.getItem('secretpad-token'),
   theme: 'light',
-  login: (name: string, role: 'ADMIN' | 'DEVELOPER' = 'ADMIN') => {
+
+  rehydrate: () => {
+    const user = getStoredUser();
     set({
-      user: { ownerId: `user-${Date.now()}`, name, role },
-      isAuthenticated: true,
+      user,
+      platform: buildPlatform(user),
+      isAuthenticated: !!localStorage.getItem('secretpad-token'),
     });
   },
-  logout: () => {
+
+  login: async (name: string, password: string) => {
+    const passwordHash = await sha256(password);
+    const user = await apiClient.login(name, passwordHash);
+    localStorage.setItem('secretpad-user', JSON.stringify(user));
+    set({
+      user,
+      isAuthenticated: true,
+      platform: {
+        platformType: (user.platformType as Platform['platformType']) || 'CENTER',
+        nodeId: user.platformNodeId || user.ownerId || '',
+      },
+    });
+  },
+
+  logout: async () => {
+    await apiClient.logout();
+    localStorage.removeItem('secretpad-token');
+    localStorage.removeItem('secretpad-user');
     set({ user: null, isAuthenticated: false });
   },
+
   toggleTheme: () => {
     set((state) => {
       const nextTheme = state.theme === 'light' ? 'dark' : 'light';

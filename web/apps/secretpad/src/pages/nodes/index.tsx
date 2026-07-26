@@ -4,9 +4,12 @@ import { apiClient, Node } from '@secretpad/api-client';
 
 export const NodesPage: React.FC = () => {
   const [nodes, setNodes] = useState<Node[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiClient.getNodes().then(setNodes);
+    apiClient.getNodes()
+      .then(setNodes)
+      .catch((e) => setError(e.message));
   }, []);
 
   return (
@@ -20,6 +23,12 @@ export const NodesPage: React.FC = () => {
         <Button variant="primary" icon={<span>＋</span>}>Register New Node</Button>
       </div>
 
+      {error && (
+        <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg px-4 py-2">
+          API Error: {error}
+        </div>
+      )}
+
       {/* Nodes Table */}
       <Card bodyClassName="p-0">
         <div className="overflow-x-auto">
@@ -30,15 +39,19 @@ export const NodesPage: React.FC = () => {
                 <th className="p-4">Node ID</th>
                 <th className="p-4">Domain Type</th>
                 <th className="p-4">Status</th>
-                <th className="p-4">IP Address</th>
-                <th className="p-4">Allocated Cores / RAM</th>
+                <th className="p-4">Net Address</th>
                 <th className="p-4">Register Time</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-gray-800 dark:text-gray-200">
+              {nodes.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-4 text-center text-gray-400">No nodes found</td>
+                </tr>
+              )}
               {nodes.map((node) => (
                 <tr key={node.nodeId} className="hover:bg-gray-50/50 dark:hover:bg-gray-850/50">
-                  <td className="p-4 font-semibold text-blue-600 dark:text-blue-400">{node.name}</td>
+                  <td className="p-4 font-semibold text-blue-600 dark:text-blue-400">{node.nodeName}</td>
                   <td className="p-4 font-mono text-gray-500">{node.nodeId}</td>
                   <td className="p-4">
                     <span className="px-2 py-0.5 rounded font-mono bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
@@ -46,13 +59,12 @@ export const NodesPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="p-4">
-                    <Badge status={node.status === 'Ready' ? 'success' : 'error'}>
-                      {node.status}
+                    <Badge status={node.nodeStatus === 'Ready' ? 'success' : 'default'}>
+                      {node.nodeStatus}
                     </Badge>
                   </td>
-                  <td className="p-4 font-mono text-gray-500">{node.ip || '127.0.0.1'}</td>
-                  <td className="p-4 text-gray-600 dark:text-gray-400">{node.cpu || 8} Cores / {node.memory || 16} GB</td>
-                  <td className="p-4 text-gray-400">{node.createTime}</td>
+                  <td className="p-4 font-mono text-gray-500">{node.netAddress || '-'}</td>
+                  <td className="p-4 text-gray-400">{node.gmtCreate}</td>
                 </tr>
               ))}
             </tbody>
