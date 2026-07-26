@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from '../shared/lib/i18n';
 
 export interface AppSidebarProps {
   currentPath: string;
@@ -6,20 +7,22 @@ export interface AppSidebarProps {
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({ currentPath, onNavigate }) => {
+  const { t } = useTranslation();
+
   const menuItems = [
-    { section: 'OVERVIEW' },
-    { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { section: 'COLLABORATION' },
-    { path: '/projects', label: 'Projects', icon: '📁', badge: '3' },
-    { path: '/dag', label: 'DAG Editor', icon: '⚡' },
-    { section: 'RESOURCES' },
-    { path: '/nodes', label: 'Node Management', icon: '🖥️' },
-    { path: '/data-tables', label: 'Data Assets', icon: '🗄️' },
-    { path: '/data-sources', label: 'Data Sources', icon: '🔌' },
-    { section: 'GOVERNANCE' },
-    { path: '/models', label: 'Model Products', icon: '🤖' },
-    { path: '/periodic-tasks', label: 'Scheduled Jobs', icon: '⏰' },
-    { path: '/messages', label: 'Message Center', icon: '🔔', badge: '5' },
+    { section: t('sidebar.overview') },
+    { path: '/dashboard', label: t('sidebar.dashboard'), icon: '📊' },
+    { section: t('sidebar.collaboration') },
+    { path: '/projects', label: t('sidebar.projects'), icon: '📁' },
+    { path: '/dag', label: t('sidebar.dag'), icon: '⚡' },
+    { section: t('sidebar.resources') },
+    { path: '/nodes', label: t('sidebar.nodes'), icon: '🖥️' },
+    { path: '/data-tables', label: t('sidebar.dataTables'), icon: '🗄️' },
+    { path: '/data-sources', label: t('sidebar.dataSources'), icon: '🔌' },
+    { section: t('sidebar.governance') },
+    { path: '/models', label: t('sidebar.models'), icon: '🤖' },
+    { path: '/periodic-tasks', label: t('sidebar.periodicTasks'), icon: '⏰' },
+    { path: '/messages', label: t('sidebar.messages'), icon: '🔔' },
   ];
 
   return (
@@ -31,7 +34,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ currentPath, onNavigate 
         </div>
         <div className="flex flex-col">
           <span className="font-bold text-gray-100 text-sm tracking-wide">SecretPad</span>
-          <span className="text-[10px] text-blue-400 font-mono">v3.0.0 (FSD)</span>
+          <span className="text-[10px] text-blue-400 font-mono">v3.0.0</span>
         </div>
       </div>
 
@@ -61,13 +64,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ currentPath, onNavigate 
                 <span className="text-sm">{item.icon}</span>
                 <span>{item.label}</span>
               </div>
-              {item.badge && (
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-gray-800 text-blue-400'
-                }`}>
-                  {item.badge}
-                </span>
-              )}
             </button>
           );
         })}

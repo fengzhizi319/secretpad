@@ -1,6 +1,8 @@
+import React from 'react';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { App } from './App';
+import { I18nProvider } from '../shared/lib/i18n';
 
 const mockUser = {
   ownerId: 'kuscia-system',
@@ -11,6 +13,8 @@ const mockUser = {
   ownerType: 'CENTER',
 };
 
+const renderWithI18n = (ui: React.ReactNode) => render(<I18nProvider>{ui}</I18nProvider>);
+
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -19,12 +23,12 @@ describe('App', () => {
   });
 
   it('renders the dashboard by default', async () => {
-    render(<App />);
+    renderWithI18n(<App />);
     expect(await screen.findByText('Console Dashboard')).toBeTruthy();
   });
 
   it('shows header and sidebar navigation', async () => {
-    render(<App />);
+    renderWithI18n(<App />);
     expect(await screen.findByText('SecretPad')).toBeTruthy();
     expect(await screen.findByText('Dashboard')).toBeTruthy();
   });

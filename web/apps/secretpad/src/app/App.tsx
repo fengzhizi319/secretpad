@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../features/auth/model/auth-store';
 import { AppSidebar } from '../widgets/AppSidebar';
 import { AppHeader } from '../widgets/AppHeader';
+import { useTranslation } from '../shared/lib/i18n';
+import { RouteGuard } from '../features/auth/ui/access-guard';
 
 import { LoginPage } from '../pages/login';
 import { DashboardPage } from '../pages/dashboard';
@@ -15,6 +17,7 @@ import { PeriodicTasksPage } from '../pages/periodic-tasks';
 import { MessagesPage } from '../pages/messages';
 
 export const App: React.FC = () => {
+  const { t } = useTranslation();
   const { isAuthenticated, rehydrate } = useAuthStore();
   const [hydrated, setHydrated] = useState(false);
   const [currentPath, setCurrentPath] = useState('/dashboard');
@@ -27,7 +30,7 @@ export const App: React.FC = () => {
   if (!hydrated) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-50 dark:bg-gray-950 text-gray-500 text-sm">
-        Loading...
+        {t('app.loading')}
       </div>
     );
   }
@@ -63,16 +66,16 @@ export const App: React.FC = () => {
 
   const getTitle = () => {
     switch (currentPath) {
-      case '/dashboard': return 'Console Dashboard';
-      case '/projects': return 'Collaborative Projects';
-      case '/nodes': return 'Kuscia Node Cluster';
-      case '/data-tables': return 'Data Assets & Classifications';
-      case '/data-sources': return 'Data Source Connections';
-      case '/dag': return 'DAG Pipeline Workspace';
-      case '/models': return 'Model Products & Inference';
-      case '/periodic-tasks': return 'Scheduled Jobs';
-      case '/messages': return 'Message Center';
-      default: return 'SecretPad Console';
+      case '/dashboard': return t('dashboard.title');
+      case '/projects': return t('projects.title');
+      case '/nodes': return t('nodes.title');
+      case '/data-tables': return t('dataTables.title');
+      case '/data-sources': return t('dataSources.title');
+      case '/dag': return t('sidebar.dag');
+      case '/models': return t('sidebar.models');
+      case '/periodic-tasks': return t('sidebar.periodicTasks');
+      case '/messages': return t('sidebar.messages');
+      default: return t('app.title');
     }
   };
 
@@ -82,7 +85,7 @@ export const App: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader title={getTitle()} onNavigate={setCurrentPath} />
         <main className="flex-1 overflow-y-auto p-6">
-          {renderContent()}
+          <RouteGuard>{renderContent()}</RouteGuard>
         </main>
       </div>
     </div>

@@ -14,6 +14,6 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     include: ['apps/**/*.{test,spec}.{ts,tsx}', 'packages/**/*.{test,spec}.{ts,tsx}'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.{git,cache}/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.{git,cache}/**', '**/e2e/**'],
   },
 });

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../../features/auth/model/auth-store';
 import { Button, Card } from '@secretpad/design-system';
+import { useTranslation } from '../../shared/lib/i18n';
 
 export const LoginPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess }) => {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('12345678');
   const [loading, setLoading] = useState(false);
@@ -17,7 +19,7 @@ export const LoginPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuc
       await login(username, password);
       onLoginSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : t('login.error'));
     } finally {
       setLoading(false);
     }
@@ -30,13 +32,13 @@ export const LoginPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuc
           <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-blue-500/20">
             SP
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">SecretPad Console</h2>
-          <p className="text-xs text-gray-400 mt-1.5">Privacy-Preserving Computing Management System</p>
+          <h2 className="text-2xl font-bold text-white tracking-tight">{t('login.title')}</h2>
+          <p className="text-xs text-gray-400 mt-1.5">{t('login.subtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="username" className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase">Username</label>
+            <label htmlFor="username" className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase">{t('login.username')}</label>
             <input
               id="username"
               type="text"
@@ -48,7 +50,7 @@ export const LoginPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuc
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase">Password</label>
+            <label htmlFor="password" className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase">{t('login.password')}</label>
             <input
               id="password"
               type="password"
@@ -67,13 +69,13 @@ export const LoginPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuc
 
           <div className="pt-2">
             <Button variant="primary" size="lg" className="w-full shadow-lg shadow-blue-600/30" loading={loading}>
-              Sign In to Console
+              {t('login.submit')}
             </Button>
           </div>
         </form>
 
         <div className="mt-6 pt-4 border-t border-gray-800/80 text-center text-xs text-gray-500">
-          SecretFlow Ecosystem • Default dev: admin / 12345678
+          SecretFlow Ecosystem • {t('login.defaultHint')}
         </div>
       </Card>
     </div>

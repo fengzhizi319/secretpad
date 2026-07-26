@@ -1,0 +1,22 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+*.local
+
+# Test outputs
+test-results
+playwright-report
+coverage
+
+# Cache
+.cache
+.vite
+*.log
+
+# Editor
+.idea
+.vscode
+*.swp

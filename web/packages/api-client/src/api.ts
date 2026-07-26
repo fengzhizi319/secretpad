@@ -2,8 +2,11 @@ import createClient from 'openapi-fetch';
 import type { paths } from './generated/secretpad';
 
 // Avoid coupling the shared API client to Vite's import.meta typings.
+// Paths in the generated client already include the `/api` prefix (e.g. `/api/login`,
+// `/api/v1alpha1/node/list`). In dev Vite proxies `/api/*` to the backend; in production
+// the Spring Boot app serves `/api/*` directly, so an empty base URL keeps the paths absolute.
 const API_BASE_URL =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL) || '/api';
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL) || '';
 
 export const api = createClient<paths>({
   baseUrl: API_BASE_URL,

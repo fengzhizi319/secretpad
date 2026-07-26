@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Badge, Button } from '@secretpad/design-system';
 import { apiClient, Node, Project, JobExecution } from '@secretpad/api-client';
+import { useTranslation } from '../../shared/lib/i18n';
+import { AccessGuard } from '../../features/auth/ui/access-guard';
 
 export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
+  const { t } = useTranslation();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobs, setJobs] = useState<JobExecution[]>([]);
@@ -12,7 +15,7 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
     Promise.all([
       apiClient.getNodes().catch((e) => { setError(e.message); return []; }),
       apiClient.getProjects().catch((e) => { setError((prev) => prev || e.message); return []; }),
-      apiClient.getJobs(),
+      apiClient.getJobs().catch((e) => { setError((prev) => prev || e.message); return []; }),
     ]).then(([n, p, j]) => {
       setNodes(n);
       setProjects(p);
@@ -26,7 +29,7 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
     <div className="space-y-6">
       {error && (
         <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg px-4 py-2">
-          API Error: {error}
+          {t('common.error', { message: error })}
         </div>
       )}
 
@@ -34,45 +37,45 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="hover:border-blue-500/50 transition-all cursor-pointer" bodyClassName="p-4">
           <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
-            <span>Collaborative Projects</span>
+            <span>{t('dashboard.projects')}</span>
             <span className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600">📁</span>
           </div>
           <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{projects.length}</div>
           <div className="mt-1 text-[11px] text-emerald-600 flex items-center gap-1 font-medium">
-            <span>↑ Active Mode</span>
+            <span>↑ {t('dashboard.activeMode')}</span>
           </div>
         </Card>
 
         <Card className="hover:border-blue-500/50 transition-all cursor-pointer" bodyClassName="p-4">
           <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
-            <span>Registered Nodes</span>
+            <span>{t('dashboard.nodes')}</span>
             <span className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-950 text-purple-600">🖥️</span>
           </div>
           <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{nodes.length}</div>
           <div className="mt-1 text-[11px] text-gray-500">
-            {readyNodes} Ready / {nodes.length - readyNodes} Offline
+            {t('dashboard.ready', { ready: readyNodes, total: nodes.length })}
           </div>
         </Card>
 
         <Card className="hover:border-blue-500/50 transition-all cursor-pointer" bodyClassName="p-4">
           <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
-            <span>Job Executions</span>
+            <span>{t('dashboard.jobs')}</span>
             <span className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-600">⚡</span>
           </div>
           <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{jobs.length}</div>
           <div className="mt-1 text-[11px] text-emerald-600 font-medium">
-            {jobs.length > 0 ? `${Math.round((jobs.filter((j) => j.status === 'SUCCEEDED').length / jobs.length) * 100)}% Success Rate` : 'No recent jobs'}
+            {jobs.length > 0 ? `${Math.round((jobs.filter((j) => j.status === 'SUCCEEDED').length / jobs.length) * 100)}% ${t('dashboard.successRate')}` : t('dashboard.noJobs')}
           </div>
         </Card>
 
         <Card className="hover:border-blue-500/50 transition-all cursor-pointer" bodyClassName="p-4">
           <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
-            <span>Kuscia Cluster Load</span>
+            <span>{t('dashboard.clusterLoad')}</span>
             <span className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600">🛡️</span>
           </div>
           <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{nodes.length > 0 ? (readyNodes / nodes.length * 100).toFixed(1) : '0.0'}%</div>
           <div className="mt-1 text-[11px] text-gray-500">
-            {readyNodes}/{nodes.length} Nodes Ready
+            {t('dashboard.ready', { ready: readyNodes, total: nodes.length })}
           </div>
         </Card>
       </div>
@@ -82,12 +85,12 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
         {/* Left Column: Recent Jobs & Project List */}
         <div className="lg:col-span-2 space-y-6">
           <Card
-            title="Recent Job Executions"
-            extra={<Button size="sm" variant="link" onClick={() => onNavigate('/dag')}>Launch New DAG Pipeline →</Button>}
+            title={t('dashboard.recentJobs')}
+            extra={<Button size="sm" variant="link" onClick={() => onNavigate('/dag')}>{t('dashboard.launchDag')}</Button>}
           >
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
               {jobs.length === 0 && (
-                <div className="py-4 text-xs text-gray-400 text-center">No recent job executions</div>
+                <div className="py-4 text-xs text-gray-400 text-center">{t('dashboard.noJobs')}</div>
               )}
               {jobs.map((job) => (
                 <div key={job.jobId} className="py-3 flex items-center justify-between">
@@ -100,10 +103,10 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
                     </div>
                     <div>
                       <div className="font-semibold text-sm text-gray-800 dark:text-gray-200">{job.name}</div>
-                      <div className="text-xs text-gray-400 font-mono">Job ID: {job.jobId} • Duration: {job.duration || '-'}</div>
+                      <div className="text-xs text-gray-400 font-mono">Job ID: {job.jobId} • {t('common.duration') || 'Duration'}: {job.duration || '-'}</div>
                     </div>
                   </div>
-                  <Badge status={job.status === 'RUNNING' ? 'processing' : 'success'}>
+                  <Badge status={job.status === 'RUNNING' ? 'processing' : job.status === 'FAILED' ? 'error' : 'success'}>
                     {job.status}
                   </Badge>
                 </div>
@@ -112,12 +115,12 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
           </Card>
 
           <Card
-            title="Active Privacy Projects"
-            extra={<Button size="sm" variant="link" onClick={() => onNavigate('/projects')}>View All Projects →</Button>}
+            title={t('dashboard.activeProjects')}
+            extra={<Button size="sm" variant="link" onClick={() => onNavigate('/projects')}>{t('dashboard.viewAllProjects')}</Button>}
           >
             <div className="space-y-3">
               {projects.length === 0 && (
-                <div className="text-xs text-gray-400 text-center py-4">No projects yet</div>
+                <div className="text-xs text-gray-400 text-center py-4">{t('projects.noProjects')}</div>
               )}
               {projects.map((proj) => (
                 <div
@@ -135,7 +138,7 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
                     <div className="text-xs text-gray-500 mt-1 line-clamp-1">{proj.description}</div>
                   </div>
                   <div className="text-right text-xs text-gray-400">
-                    <div>{proj.nodes.length} Nodes Joined</div>
+                    <div>{proj.nodes.length} {t('projects.joinedNodes')}</div>
                     <div className="text-[11px] text-blue-600 font-medium mt-0.5">{proj.jobCount} Jobs Ran</div>
                   </div>
                 </div>
@@ -146,10 +149,10 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
 
         {/* Right Column: Node Topology & Quick Actions */}
         <div className="space-y-6">
-          <Card title="Node Topology Status">
+          <Card title={t('dashboard.nodeTopology')}>
             <div className="space-y-3">
               {nodes.length === 0 && (
-                <div className="text-xs text-gray-400 text-center py-2">No nodes registered</div>
+                <div className="text-xs text-gray-400 text-center py-2">{t('nodes.noNodes')}</div>
               )}
               {nodes.map((node) => (
                 <div key={node.nodeId} className="p-3 rounded-lg border border-gray-100 dark:border-gray-800 flex items-center justify-between">
@@ -168,19 +171,19 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
             </div>
           </Card>
 
-          <Card title="Quick Actions">
+          <Card title={t('dashboard.quickActions')}>
             <div className="grid grid-cols-2 gap-2.5">
               <Button onClick={() => onNavigate('/dag')} variant="outline" className="justify-start text-xs p-3">
-                ⚡ Create DAG Workflow
+                ⚡ {t('dashboard.createDag')}
               </Button>
               <Button onClick={() => onNavigate('/projects')} variant="outline" className="justify-start text-xs p-3">
-                ➕ New Project
+                ➕ {t('dashboard.newProject')}
               </Button>
               <Button onClick={() => onNavigate('/data-tables')} variant="outline" className="justify-start text-xs p-3">
-                🗄️ Import Data Table
+                🗄️ {t('dashboard.importTable')}
               </Button>
               <Button onClick={() => onNavigate('/nodes')} variant="outline" className="justify-start text-xs p-3">
-                🖥️ Register Node
+                🖥️ {t('dashboard.registerNode')}
               </Button>
             </div>
           </Card>

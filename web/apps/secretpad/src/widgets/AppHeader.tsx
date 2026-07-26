@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuthStore } from '../features/auth/model/auth-store';
 import { Button } from '@secretpad/design-system';
+import { Locale, useTranslation } from '../shared/lib/i18n';
 
 export interface AppHeaderProps {
   title?: string;
@@ -9,6 +10,7 @@ export interface AppHeaderProps {
 
 export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Console Overview', onNavigate }) => {
   const { user, platform, theme, toggleTheme, logout } = useAuthStore();
+  const { t, locale, setLocale } = useTranslation();
 
   return (
     <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 flex items-center justify-between flex-shrink-0">
@@ -22,13 +24,22 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Console Overview'
 
       {/* Header Right Actions */}
       <div className="flex items-center gap-3">
+        <select
+          value={locale}
+          onChange={(e) => setLocale(e.target.value as Locale)}
+          className="text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-700 dark:text-gray-200 focus:outline-none focus:border-blue-500"
+        >
+          <option value="zh-CN">{t('header.zh')}</option>
+          <option value="en-US">{t('header.en')}</option>
+        </select>
+
         <Button
           size="sm"
           variant="ghost"
           onClick={toggleTheme}
           title="Toggle Theme"
         >
-          {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
+          {theme === 'light' ? '🌙' : '☀️'}
         </Button>
 
         <button
@@ -50,7 +61,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Console Overview'
             <span className="font-semibold text-gray-800 dark:text-gray-200">{user?.name || 'admin'}</span>
             <span className="text-[10px] text-gray-400">{user?.role || 'ADMIN'}</span>
           </div>
-          <Button size="sm" variant="ghost" onClick={logout} className="text-gray-400 hover:text-red-500 ml-1">
+          <Button size="sm" variant="ghost" onClick={logout} className="text-gray-400 hover:text-red-500 ml-1" title={t('header.logout')}>
             ➔
           </Button>
         </div>

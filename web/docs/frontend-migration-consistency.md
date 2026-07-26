@@ -1,270 +1,88 @@
-# SecretPad 新前端迁移一致性保障指南
+# SecretPad 新前端迁移一致性说明
 
-> 本文档说明如何确保旧前端 `secretpad/frontend-src` 的功能与接口在 `secretpad/web` 新前端上保持一致并正确运行。
-> 适用对象：参与新前端迁移、测试、Review 的开发人员。
+> 本文档说明如何保证 `secretpad/frontend-src`（旧前端）的功能与接口在 `secretpad/web`（新前端）上保持一致，并持续可验证。
 
----
+## 1. 迁移原则
 
-## 1. 迁移目标
+- **接口真实化**：新前端所有 CRUD、Job、权限、平台类型判断均调用后端真实接口，不保留 mock 数据。
+- **接口契约对齐**：以 `secretpad/web/openapi/secretpad.openapi.json` 为唯一源，通过 `openapi-typescript` + `openapi-fetch` 生成类型与请求客户端。
+- **功能逐页映射**：旧前端每个一级页面（Dashboard / Projects / Nodes / DataSources / DataTables / DAG / ...）的字段、按钮、权限在新前端都有对应实现。
+- **双语支持**：所有用户可见文案通过 `shared/lib/i18n` 字典统一维护，默认跟随浏览器，支持中英切换。
+- **权限模型复刻**：复用旧前端的 `Platform` / `PadMode` / `useHasAccess` / `AccessGuard` / `RouteGuard` 模型。
 
-将旧前端（Umi 4 + Ant Design 5 + Valtio）完整迁移到新前端（Vite 5 + Tailwind + Zustand）后，必须满足：
+## 2. 接口一致性检查清单
 
-1. **接口契约一致**：新前端调用与旧前端相同的 REST 接口，请求/响应字段一致。
-2. **功能行为一致**：页面交互、表单校验、权限控制、平台适配与旧前端对齐。
-3. **视觉与信息架构一致**：页面路由、菜单、关键操作流程（登录 → 项目 → DAG → 结果）保持一致。
-4. **回归可验证**：每次改动都有单元/集成/E2E 测试兜底，关键链路可通过自动化脚本复跑。
-
----
-
-## 2. 当前状态
-
-| 维度 | 旧前端 `frontend-src` | 新前端 `web` |
-|---|---|---|
-| 框架 | Umi 4 + Ant Design 5 + Valtio | Vite 5 + Tailwind + Zustand |
-| API 层 | `@umijs/openapi` 生成真实后端调用 | ✅ `openapi-typescript` + `openapi-fetch` 已接入真实后端 |
-| 路由/页面 | ~17 个路由，覆盖 CENTER/EDGE/P2P/AUTONOMY | 8 个页面骨架，P0 页面已接后端 |
-| 后端接口 | 约 100+ 个 | P0 关键接口已接入（login、node/list、project/list、datasource/list、datatable/list） |
-| 权限/平台适配 | 完整 route wrappers + `hasAccess` | 已支持登录态持久化、401 拦截、平台信息保存；细粒度平台 guard 待补充 |
-
----
-
-## 3. 分阶段迁移策略
-
-### Phase 1：API 契约层（接口一致性）— 已完成
-
-目标：新前端拿到跟旧前端完全一致、带类型的后端 API 客户端。
-
-#### 3.1 生成 OpenAPI 文档
-
-后端已集成 SpringDoc，启动后访问：
-
-```bash
-curl http://127.0.0.1:8080/v3/api-docs \
-  > /home/charles/code/sfwork/secretpad/web/openapi/secretpad.openapi.json
-```
-
-生成文件已提交到仓库，作为前后端契约的“快照”。
-
-#### 3.2 生成 TypeScript 客户端
-
-在 `web/scripts/codegen-openapi.ts` 中调用 `openapi-typescript`，将 spec 转为类型定义：
-
-```bash
-cd /home/charles/code/sfwork/secretpad/web
-pnpm codegen:openapi
-```
-
-输出：`packages/api-client/src/generated/secretpad.d.ts`。
-
-#### 3.3 接入真实请求
-
-`packages/api-client` 使用 `openapi-fetch` + 生成的类型封装统一请求客户端：
-
-- 复用 `apps/secretpad/vite.config.ts` 中的 `/api` proxy。
-- 请求头注入 `User-Token`（从 `localStorage` 读取）和 `Trace-Id`。
-- 401 / token 过期统一拦截并跳转 `/login`。
-- 返回数据用 Zod schema 做运行时映射（`packages/api-client/src/schemas`）。
-
-### Phase 2：功能对账矩阵（功能一致性）— P0 主链路已完成
-
-| 优先级 | 旧页面/功能 | 新前端目标页 | 关键接口 | 状态 |
+| 能力 | 旧前端页面/模块 | 新前端页面 | 真实接口 | 状态 |
 |---|---|---|---|---|
-| P0 | Login | `/login` | `POST /api/login`, `POST /api/logout` | ✅ |
-| P0 | Dashboard / Home | `/dashboard` | `node/list`, `project/list`（jobs 暂时为空） | ✅ |
-| P0 | Node Management | `/nodes` | `node/list` | ✅ 列表 |
-| P0 | Data Source | `/data-sources` | `datasource/list` | ✅ 列表 |
-| P0 | Data Table | `/data-tables` | `datatable/list` | ✅ 列表 |
-| P0 | Project List | `/projects` | `project/list`, `project/create` | ✅ 列表 + 创建 |
-| P1 | DAG Canvas | `/dag` | `graph/*`, `component/*`, `project/datatable/*` | 待补充 |
-| P1 | Graph/Pipeline List | 新增 `/graphs` | `graph/list/start/stop` | 待补充 |
-| P1 | Record/Result | 新增 `/record` | `project/job/*`, `graph/node/output`, `data/download` | 待补充 |
-| P2 | Message Center | `/messages` | `message/list/reply/pending` | 待补充 |
-| P2 | Model Manager | `/models` | `model/page/*`, `model/serving/*` | 待补充 |
-| P2 | Periodic Tasks | `/periodic-tasks` | `scheduled/*` | 待补充 |
-| P2 | Edge / P2P / AUTONOMY 专属页 | 视平台类型动态渲染 | `p2p/*`, `inst/*`, `nodeRoute/*` | 待补充 |
+| 登录 / 登出 | Login | `pages/login` | `POST /api/login` / `/api/logout` | ✅ |
+| Dashboard 统计与 Recent Jobs | Dashboard | `pages/dashboard` | `node/list`, `project/list`, `project/job/list` | ✅ |
+| 项目列表 / 创建 | Projects | `pages/projects` | `project/list`, `project/create` | ✅ |
+| 节点注册 / 编辑 / 删除 / 刷新 / Token | Nodes | `pages/nodes` | `node/*` | ✅ |
+| 数据源添加 / 删除 | DataSources | `pages/data-sources` | `datasource/*` | ✅ |
+| 数据表导入 / 删除 / Schema | DataTables | `pages/data-tables` | `datatable/*` | ✅ |
+| 平台类型路由守卫 | route guards | `features/auth/ui/access-guard.tsx` | auth-store 中 platformType | ✅ |
+| 按钮级权限 | AccessControl | `features/auth/ui/access-guard.tsx` | `useHasAccess` + `AccessGuard` | ✅ |
+| 中英双语切换 | Locale Switch | `widgets/AppHeader` + `shared/lib/i18n` | 本地字典 | ✅ |
 
-### Phase 3：权限与平台适配
+## 3. 自动化验证
 
-旧前端的路由 guards 需要在新前端中补齐：
-
-| Guard | 规则 |
-|---|---|
-| `RequiredAuth` | 未登录拦截，跳 `/login` |
-| `CenterAuth` | `platformType === 'CENTER'` |
-| `EdgeAuth` | 允许 CENTER 管理员操作嵌入节点，或 `platformType === 'EDGE'` 且 `ownerId` 匹配 |
-| `AutonomyAuth` | `platformType === 'AUTONOMY'` 且 `ownerId` 匹配 |
-| `P2pCenterAuth` | 允许 `CENTER` 或 `AUTONOMY` 访问 DAG/Record/ModelSubmission |
-
-实现建议：
-
-- 在 `features/auth/lib/platform-type.ts` 中定义平台判断函数。
-- 在 `features/auth/ui/required-auth.tsx` / `required-permission.tsx` 中实现路由/按钮级守卫。
-- 菜单项根据 `platformType` 动态过滤。
-
-### Phase 4：测试兜底
-
-#### 4.1 单元/集成测试（Vitest）
-
-已覆盖：
-
-- `packages/utils/src/crypto.test.ts` — SHA-256 与旧前端 `crypto-js/sha256` 输出一致。
-- `packages/api-client/src/client.test.ts` — `login` / `logout`、`node/list`、`datasource/list` 的响应映射与 token 管理。
-- `apps/secretpad/src/pages/login/login.test.tsx` — 表单提交、登录成功回调、失败提示。
-- `apps/secretpad/src/app/App.test.tsx` — 登录态持久化后渲染 Dashboard。
-
-后续每个 P0 页面补充：加载状态、空数据、数据渲染、分页/搜索、表单弹窗提交成功/失败。
-
-#### 4.2 E2E 测试（Playwright）
-
-启动真实 backend + Kuscia + 新前端后，跑关键路径：
-
-```
-login → create project → add node → create data source
-→ upload data table → create graph → run graph → view result
-```
-
-E2E 用例放在 `secretpad/web/e2e/`。
-
-#### 4.3 接口契约回归
-
-CI 中执行：
+### 3.1 类型检查
 
 ```bash
-pnpm codegen:openapi
-```
-
-若生成的类型与上一次提交有 diff，则 PR 必须显式说明后端接口变更，并同步前端调用点。
-
----
-
-## 4. 已知后端字段映射与注意事项
-
-### 4.1 登录
-
-- 旧前端：`passwordHash = sha256(password).toString()`。
-- 新前端：`packages/utils/src/crypto.ts` 中的 `sha256` 返回相同小写 hex。
-- 后端返回 `UserContextDTO`：`token`, `name`, `ownerId`, `ownerType`, `platformType`, `platformNodeId`。
-- 新前端保存 `secretpad-token` 与 `secretpad-user` 到 `localStorage`，并在 `App` 启动时 `rehydrate`。
-
-### 4.2 节点列表
-
-- 接口：`POST /api/v1alpha1/node/list`，请求体可为空对象 `{}`。
-- 关键字段：`nodeId`, `nodeName`, `nodeStatus`, `type`, `netAddress`, `gmtCreate`。
-- 旧前端部分场景使用 `status`、`name`、`ip`、`createTime`，新前端在 schema 中做了向后兼容映射。
-
-### 4.3 项目列表
-
-- 接口：`POST /api/v1alpha1/project/list`，请求体可为空对象 `{}`。
-- 关键字段：`projectId`, `projectName`, `description`, `computeMode`, `status`, `nodes`（`ProjectNodeVO[]`），`gmtCreate`。
-- `jobCount` 后端不一定返回，前端默认补 0。
-
-### 4.4 创建项目
-
-- 接口：`POST /api/v1alpha1/project/create`。
-- 必填字段：`name`, `computeMode`, `teeNodeId`；非 TEE 场景 `teeNodeId` 传空字符串即可。
-- 节点需在创建后通过 `project/node/add` 单独添加，当前创建弹窗仅收集名称/描述/计算模式。
-
-### 4.5 数据源列表
-
-- 接口：`POST /api/v1alpha1/datasource/list`。
-- 必须字段：`ownerId`（对应节点 `nodeId`，不是 `platformNodeId`）。
-- 返回结构：`{ infos: DatasourceListInfoAggregate[] }`，其中 `infos[].nodes` 为关联节点数组。
-- 新前端先调 `node/list`，再用第一个节点的 `nodeId` 作为 `ownerId` 请求数据源。
-
-### 4.6 数据表列表
-
-- 接口：`POST /api/v1alpha1/datatable/list`。
-- 必须字段：`pageSize`, `pageNumber`；可选 `ownerId`（节点 `nodeId`）。
-- 返回结构：`{ datatableNodeVOList: DatatableNodeVO[] }`。
-- `DatatableNodeVO.datatableVO` 包含 `datatableId`, `datatableName`, `status`, `schema.columns`, `rowCount`。
-
----
-
-## 5. 最小闭环验证流程
-
-建议按以下顺序逐个接口替换 mock，每完成一步就通过浏览器 DevTools 验证：
-
-1. 启动后端（`target/secretpad.jar`）和新前端（`pnpm dev`）。
-2. 替换 `/api/login` 为真实调用，登录成功后保存 `User-Token`。
-3. 替换 Dashboard 的 `node/list`、`project/list`。
-4. 替换 `/nodes` 的 `node/list`。
-5. 替换 `/data-sources` 和 `/data-tables` 的列表接口。
-6. 替换 `/projects` 的列表、创建接口。
-
-每替换一个接口，在 `packages/api-client/src/` 补充：
-
-- Zod response schema。
-- 错误处理分支。
-- 对应 Vitest 测试。
-
----
-
-## 6. 检查清单（Checklist）
-
-### API 层
-
-- [x] `openapi/secretpad.openapi.json` 已生成并提交。
-- [x] `packages/api-client` 已接入 `openapi-fetch` 并复用 Vite `/api` proxy。
-- [x] 请求头自动注入 `User-Token` 和 `Trace-Id`。
-- [x] 401 统一拦截并跳转 `/login`。
-- [x] 关键响应已加 Zod 运行时映射。
-
-### P0 主链路
-
-- [x] 登录/登出可用。
-- [x] Dashboard 展示真实节点、项目统计（jobs 待接入真实接口）。
-- [x] 节点管理：列表已接入。
-- [x] 数据源：列表已接入。
-- [x] 数据表：列表已接入。
-- [x] 项目管理：列表、创建已接入。
-
-### 权限与平台
-
-- [x] 未登录访问受保护路由自动跳转登录页（401 拦截 + 刷新后 rehydrate）。
-- [ ] `CENTER` 用户看到管理菜单，`EDGE`/`AUTONOMY` 用户看到对应工作台。
-- [ ] 按钮级权限（如删除节点、创建项目）与旧前端一致。
-
-### 测试
-
-- [x] P0 页面均有 Vitest 测试（login、api-client、App）。
-- [ ] 至少一条 Playwright E2E 关键路径跑通。
-- [ ] CI 中运行 `pnpm codegen:openapi` 无未解释的类型 diff。
-
----
-
-## 7. 相关命令
-
-```bash
-# 1. 生成 OpenAPI 客户端
 cd /home/charles/code/sfwork/secretpad/web
-pnpm codegen:openapi
-
-# 2. 运行类型检查与测试
-pnpm run typecheck
-pnpm test
-
-# 3. 生产打包并集成到后端
-cd /home/charles/code/sfwork/secretpad
-./scripts/build/build.sh true
-
-# 4. 全栈本地启动
-bash /home/charles/code/sfwork/scripts1/run-all-no-docker.sh
+corepack pnpm typecheck
 ```
 
----
+覆盖所有 `@secretpad/*` workspace 包，确保 OpenAPI 类型、业务类型、TSX 组件类型一致。
 
-## 8. 附录：旧前端 API 接口速查
+### 3.2 单元测试
 
-主要接口分类（详见旧前端 `frontend-src/apps/platform/src/services/secretpad/`）：
+```bash
+cd /home/charles/code/sfwork/secretpad/web
+corepack pnpm test
+```
 
-- **Auth**: `/api/login`, `/api/logout`, `/api/v1alpha1/user/get`, `/api/v1alpha1/user/updatePwd`
-- **Node**: `/api/v1alpha1/node/page`, `/api/v1alpha1/node/create`, `/api/v1alpha1/node/update`, `/api/v1alpha1/node/delete`, `/api/v1alpha1/node/refresh`
-- **DataSource**: `/api/v1alpha1/datasource/list`, `/api/v1alpha1/datasource/create`, `/api/v1alpha1/datasource/delete`
-- **DataTable**: `/api/v1alpha1/datatable/list`, `/api/v1alpha1/datatable/create`, `/api/v1alpha1/datatable/delete`
-- **Project**: `/api/v1alpha1/project/list`, `/api/v1alpha1/project/create`, `/api/v1alpha1/project/update`, `/api/v1alpha1/project/delete`
-- **Graph/DAG**: `/api/v1alpha1/graph/*`
-- **Message**: `/api/v1alpha1/message/*`
-- **Model**: `/api/v1alpha1/model/*`
-- **Scheduled**: `/api/v1alpha1/scheduled/*`
+包含：
+- `packages/utils` 工具函数
+- `packages/api-client` 接口映射
+- `apps/secretpad` 页面渲染与交互
 
-完整接口列表以 `openapi/secretpad.openapi.json` 为准。
+### 3.3 E2E 关键路径
+
+```bash
+cd /home/charles/code/sfwork/secretpad/web/apps/secretpad
+
+# 1. 确保后端在 8080 运行，且 Vite dev server 在 8000 运行
+# 2. 运行 Playwright E2E
+corepack pnpm exec playwright test
+```
+
+当前 E2E 覆盖：
+- 登录成功并进入 Dashboard
+- 侧边栏导航至 Nodes 页面
+
+后续随功能迭代继续补充 Projects / DataSources / DataTables 的创建-删除闭环 E2E。
+
+## 4. 开发-生产构建衔接
+
+采用「同仓并列隔离（Monorepo）」方案：
+
+- 开发期：`secretpad/web/apps/secretpad` 通过 Vite proxy (`/api → 127.0.0.1:8080`) 直连本地后端。
+- 生产期：`secretpad/web/scripts/build/build.sh` 先 `pnpm build`，再将 `apps/secretpad/dist/*` 复制到 `secretpad/secretpad-web/src/main/resources/static/`，最后 `mvn package` 出 Fat Jar。
+
+详见顶层 `secretpad/scripts/build/build.sh` 与项目 `README.md`。
+
+## 5. 新增页面/功能时的自查项
+
+1. 是否从真实 API 获取数据（`apiClient.*`）？
+2. 是否使用 `useTranslation()` 包裹所有用户可见文案？
+3. 是否在 `shared/lib/i18n/dictionaries.ts` 中补充 `zh-CN` / `en-US` 字典？
+4. 管理类按钮是否用 `AccessGuard` 包裹，并指定允许的 `Platform` / `PadMode`？
+5. 是否在 `App.tsx` 路由分发中通过 `RouteGuard` 校验平台类型？
+6. 是否补充单元测试 / Playwright E2E？
+
+## 6. 已知限制与后续阶段
+
+- DAG 画布、模型管理、周期任务、消息中心当前为占位页面，需按后端接口逐步补齐。
+- 节点 Token 弹窗目前仅展示，未提供复制按钮；后续可基于 `navigator.clipboard` 增强。
+- 数据表导入当前使用简单的 `name:type` Schema 输入，后续可接入数据源自动拉取元数据。

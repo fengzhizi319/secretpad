@@ -9,17 +9,19 @@ export const UserSchema = z.object({
   platformType: z.string(),
   platformNodeId: z.string().optional(),
   ownerType: z.string().optional(),
+  deployMode: z.string().optional(),
+  apiResources: z.array(z.string()).optional(),
 });
 export type User = z.infer<typeof UserSchema>;
 
 // Platform Schema
 export const PlatformSchema = z.object({
-  platformType: z.enum(['CENTER', 'EDGE', 'AUTONOMY', 'P2P']),
+  platformType: z.enum(['CENTER', 'EDGE', 'AUTONOMY', 'P2P', 'TEST']),
   nodeId: z.string().optional(),
 });
 export type Platform = z.infer<typeof PlatformSchema>;
 
-// Node Schema (from /api/v1alpha1/node/list)
+// Node Schema (from /api/v1alpha1/node/*)
 export const NodeSchema = z.object({
   nodeId: z.string(),
   nodeName: z.string(),
@@ -30,6 +32,10 @@ export const NodeSchema = z.object({
   netAddress: z.string().optional(),
   description: z.string().optional(),
   gmtCreate: z.string(),
+  mode: z.number().optional(),
+  nodeAuthenticationCode: z.string().optional(),
+  token: z.string().optional(),
+  tokenStatus: z.string().optional(),
   // legacy optional fields kept for local mock fallbacks
   ip: z.string().optional(),
   cpu: z.number().optional(),
@@ -48,7 +54,7 @@ export const ProjectNodeSchema = z.object({
 });
 export type ProjectNode = z.infer<typeof ProjectNodeSchema>;
 
-// Project Schema (from /api/v1alpha1/project/list)
+// Project Schema (from /api/v1alpha1/project/*)
 export const ProjectSchema = z.object({
   projectId: z.string(),
   projectName: z.string(),
@@ -64,7 +70,7 @@ export const ProjectSchema = z.object({
 });
 export type Project = z.infer<typeof ProjectSchema>;
 
-// DataTable column
+// DataTable column (frontend normalized shape)
 export const DataTableColumnSchema = z.object({
   name: z.string(),
   type: z.string(),
@@ -73,17 +79,28 @@ export const DataTableColumnSchema = z.object({
 });
 export type DataTableColumn = z.infer<typeof DataTableColumnSchema>;
 
-// DataTable Schema (from /api/v1alpha1/datatable/list)
+// Raw backend table column shape
+export const BackendTableColumnSchema = z.object({
+  colName: z.string().optional(),
+  colType: z.string().optional(),
+  colComment: z.string().optional(),
+});
+export type BackendTableColumn = z.infer<typeof BackendTableColumnSchema>;
+
+// DataTable Schema (from /api/v1alpha1/datatable/*)
 export const DataTableSchema = z.object({
   tableName: z.string(),
   tableId: z.string(),
   nodeId: z.string(),
   nodeName: z.string().optional(),
   datasourceId: z.string().optional(),
+  datasourceType: z.string().optional(),
+  relativeUri: z.string().optional(),
   columns: z.array(DataTableColumnSchema).default([]),
   rowCount: z.number().default(0),
   status: z.string(),
   gmtCreate: z.string().optional(),
+  description: z.string().optional(),
   // legacy fallbacks
   datatableVO: z.any().optional(),
   table: z.any().optional(),
@@ -99,7 +116,7 @@ export const DataSourceNodeSchema = z.object({
 });
 export type DataSourceNode = z.infer<typeof DataSourceNodeSchema>;
 
-// DataSource Schema (from /api/v1alpha1/datasource/list)
+// DataSource Schema (from /api/v1alpha1/datasource/*)
 export const DataSourceSchema = z.object({
   datasourceId: z.string(),
   name: z.string(),
@@ -107,12 +124,13 @@ export const DataSourceSchema = z.object({
   nodes: z.array(DataSourceNodeSchema).default([]),
   status: z.string().optional(),
   createTime: z.string().optional(),
+  info: z.record(z.any()).optional(),
   // legacy fallbacks
   nodeId: z.string().optional(),
 });
 export type DataSource = z.infer<typeof DataSourceSchema>;
 
-// Job Execution Schema (placeholder until real job API is wired)
+// Job Execution Schema (normalized for UI)
 export const JobExecutionSchema = z.object({
   jobId: z.string(),
   projectId: z.string(),
@@ -120,5 +138,42 @@ export const JobExecutionSchema = z.object({
   status: z.enum(['RUNNING', 'SUCCEEDED', 'FAILED', 'PENDING']),
   duration: z.string().optional(),
   createTime: z.string(),
+  errMsg: z.string().optional(),
+  finished: z.boolean().optional(),
 });
 export type JobExecution = z.infer<typeof JobExecutionSchema>;
+
+// Form input schemas (runtime validation helpers)
+export const CreateNodeInputSchema = z.object({
+  name: z.string().min(1).max(32),
+  mode: z.number().int().min(0).max(2),
+});
+export type CreateNodeInput = z.infer<typeof CreateNodeInputSchema>;
+
+export const UpdateNodeInputSchema = z.object({
+  nodeId: z.string(),
+  netAddress: z.string().regex(/^.+:\d+$/),
+});
+export type UpdateNodeInput = z.infer<typeof UpdateNodeInputSchema>;
+
+export const CreateDataSourceInputSchema = z.object({
+  ownerId: z.string(),
+  nodeIds: z.array(z.string()),
+  type: z.string(),
+  name: z.string().min(1).max(32),
+  info: z.record(z.any()),
+});
+export type CreateDataSourceInput = z.infer<typeof CreateDataSourceInputSchema>;
+
+export const CreateDataTableInputSchema = z.object({
+  ownerId: z.string(),
+  nodeIds: z.array(z.string()),
+  datatableName: z.string().min(1).max(32),
+  datasourceId: z.string(),
+  datasourceName: z.string(),
+  datasourceType: z.string(),
+  relativeUri: z.string(),
+  columns: z.array(DataTableColumnSchema),
+  desc: z.string().max(100).optional(),
+});
+export type CreateDataTableInput = z.infer<typeof CreateDataTableInputSchema>;
