@@ -2,7 +2,8 @@ import React from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '../features/auth/model/auth-store';
 import { Button } from '@secretpad/design-system';
-import { Locale, useTranslation } from '../shared/lib/i18n';
+import type { Locale } from '../shared/lib/i18n';
+import { useTranslation } from '../shared/lib/i18n';
 
 export interface AppHeaderProps {
   title?: string;

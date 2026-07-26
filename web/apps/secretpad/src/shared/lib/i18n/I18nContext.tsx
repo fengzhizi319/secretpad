@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { dictionaries, Locale } from './dictionaries';
+import type { Locale } from './dictionaries';
+import { dictionaries } from './dictionaries';
 
 const STORAGE_KEY = 'secretpad-locale';
 

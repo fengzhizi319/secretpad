@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import {
   createRootRoute,
   createRoute,
@@ -7,25 +7,33 @@ import {
   redirect,
   useNavigate,
 } from '@tanstack/react-router';
-import { ToastContainer } from '@secretpad/design-system';
+import { ToastContainer, Button } from '@secretpad/design-system';
 
 import { AppLayout } from './app/AppLayout';
 import { LoginPage } from './pages/login';
-import { DashboardPage } from './pages/dashboard';
-import { ProjectsPage } from './pages/projects';
-import { NodesPage } from './pages/nodes';
-import { DataTablesPage } from './pages/data-tables';
-import { DataSourcesPage } from './pages/data-sources';
-import { DataSourceDetailPage } from './pages/data-sources/detail';
-import { DAGPage } from './pages/dag';
-import { ModelsPage } from './pages/models';
-import { PeriodicTasksPage } from './pages/periodic-tasks';
-import { MessagesPage } from './pages/messages';
-import { NodeRoutesPage } from './pages/node-routes';
-import { InstitutionsPage } from './pages/institutions';
-import { P2pProjectsPage } from './pages/p2p/projects';
-import { P2pMyNodePage } from './pages/p2p/my-node';
-import { AccountPage } from './pages/account';
+
+// Route-level code splitting: each authenticated page is loaded on demand.
+// React.lazy requires a default export, so named page components are adapted.
+const lazyPage = <T extends Record<string, React.ComponentType>>(
+  factory: () => Promise<T>,
+  name: keyof T
+) => React.lazy(() => factory().then((m) => ({ default: m[name] })));
+
+const DashboardPage = lazyPage(() => import('./pages/dashboard'), 'DashboardPage');
+const ProjectsPage = lazyPage(() => import('./pages/projects'), 'ProjectsPage');
+const NodesPage = lazyPage(() => import('./pages/nodes'), 'NodesPage');
+const DataTablesPage = lazyPage(() => import('./pages/data-tables'), 'DataTablesPage');
+const DataSourcesPage = lazyPage(() => import('./pages/data-sources'), 'DataSourcesPage');
+const DataSourceDetailPage = lazyPage(() => import('./pages/data-sources/detail'), 'DataSourceDetailPage');
+const DAGPage = lazyPage(() => import('./pages/dag'), 'DAGPage');
+const ModelsPage = lazyPage(() => import('./pages/models'), 'ModelsPage');
+const PeriodicTasksPage = lazyPage(() => import('./pages/periodic-tasks'), 'PeriodicTasksPage');
+const MessagesPage = lazyPage(() => import('./pages/messages'), 'MessagesPage');
+const NodeRoutesPage = lazyPage(() => import('./pages/node-routes'), 'NodeRoutesPage');
+const InstitutionsPage = lazyPage(() => import('./pages/institutions'), 'InstitutionsPage');
+const P2pProjectsPage = lazyPage(() => import('./pages/p2p/projects'), 'P2pProjectsPage');
+const P2pMyNodePage = lazyPage(() => import('./pages/p2p/my-node'), 'P2pMyNodePage');
+const AccountPage = lazyPage(() => import('./pages/account'), 'AccountPage');
 
 /**
  * Read the auth token directly from localStorage (not the Zustand store).
@@ -36,15 +44,49 @@ import { AccountPage } from './pages/account';
  */
 const getAuthToken = () => localStorage.getItem('secretpad-token');
 
+const PageFallback: React.FC = () => (
+  <div className="min-h-[60vh] flex items-center justify-center">
+    <span className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" aria-label="loading" />
+  </div>
+);
+
 const RootComponent: React.FC = () => (
   <>
     <ToastContainer />
-    <Outlet />
+    <Suspense fallback={<PageFallback />}>
+      <Outlet />
+    </Suspense>
   </>
+);
+
+/**
+ * Route-level error fallback. TanStack Router renders this when a route's
+ * loader or component throws, so a single bad page degrades locally instead
+ * of blanking the whole app.
+ */
+const RouteErrorComponent: React.FC<{ error: Error; reset: () => void }> = ({ error, reset }) => (
+  <div className="min-h-[60vh] flex items-center justify-center p-6">
+    <div className="max-w-md w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-lg p-8 text-center">
+      <div className="text-4xl mb-4" aria-hidden>
+        ⚠️
+      </div>
+      <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Page failed to load</h1>
+      <p className="text-xs text-gray-400 dark:text-gray-500 font-mono break-all mb-6">{error.message}</p>
+      <div className="flex justify-center gap-3">
+        <Button variant="outline" onClick={reset}>
+          Try again
+        </Button>
+        <Button variant="primary" onClick={() => (window.location.href = '/dashboard')}>
+          Back to dashboard
+        </Button>
+      </div>
+    </div>
+  </div>
 );
 
 export const rootRoute = createRootRoute({
   component: RootComponent,
+  errorComponent: RouteErrorComponent,
 });
 
 const LoginRouteComponent: React.FC = () => {

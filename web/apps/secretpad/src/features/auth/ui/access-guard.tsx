@@ -1,5 +1,6 @@
 import React from 'react';
-import { AccessType, useHasAccess, usePlatform } from '@/shared/lib/platform';
+import type { AccessType } from '@/shared/lib/platform';
+import { useHasAccess, usePlatform } from '@/shared/lib/platform';
 import { useTranslation } from '@/shared/lib/i18n';
 
 export const AccessGuard: React.FC<{ access: AccessType; children: React.ReactNode; fallback?: React.ReactNode }> = ({

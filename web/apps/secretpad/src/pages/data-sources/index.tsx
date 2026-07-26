@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Badge, Modal, ConfirmDialog, toast } from '@secretpad/design-system';
-import { apiClient, DataSource, CreateDataSourceInput } from '@secretpad/api-client';
+import type { DataSource, CreateDataSourceInput } from '@secretpad/api-client';
+import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
@@ -48,7 +49,7 @@ export const DataSourcesPage: React.FC = () => {
 
   const createMutation = useMutation({
     mutationFn: () => {
-      let info: Record<string, any> = {};
+      let info: Record<string, any>;
       try {
         info = JSON.parse(dsInfo);
       } catch {

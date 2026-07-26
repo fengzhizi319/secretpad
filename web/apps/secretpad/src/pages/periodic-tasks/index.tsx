@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Badge, Button, Modal, ConfirmDialog, toast } from '@secretpad/design-system';
-import { apiClient, PageScheduledVO, TaskPageScheduledVO } from '@secretpad/api-client';
+import type { PageScheduledVO, TaskPageScheduledVO } from '@secretpad/api-client';
+import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
@@ -29,7 +30,7 @@ export const PeriodicTasksPage: React.FC = () => {
     queryKey: ['projects'],
     queryFn: () => apiClient.getProjects(),
   });
-  const projects = projectsQuery.data ?? [];
+  const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
 
   // Default the selected project to the first one once projects load.
   useEffect(() => {

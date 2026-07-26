@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Badge, Modal, ConfirmDialog, toast } from '@secretpad/design-system';
-import { apiClient, Node, CreateNodeInput, UpdateNodeInput } from '@secretpad/api-client';
+import type { Node, CreateNodeInput, UpdateNodeInput } from '@secretpad/api-client';
+import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';

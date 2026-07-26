@@ -48,6 +48,12 @@
 | 用户信息 / 修改密码 | Account | `pages/account` | `user/get`, `user/updatePwd` | ✅ |
 | 数据源详情 / 节点 | DataSources | `pages/data-sources/detail` | `datasource/detail`, `datasource/nodes` | ✅ |
 | 审批创建 / 状态轮询 | Approval | `packages/api-client` | `approval/create`, `approval/status` | ✅ |
+| 项目任务日志 / 输出 | Projects / DAG | `packages/api-client` | `project/job/task/logs`, `project/job/task/output` | ✅ |
+| 项目 TEE 节点 / 输出表 / 表配置 / 数据源 / 机构 | Projects | `packages/api-client` | `project/tee/list`, `project/getOutTable`, `project/update/tableConfig`, `project/datasource/list`, `project/inst/add` | ✅ |
+| 周期任务一次成功 / 作业列表 / 任务详情 | Periodic Tasks | `packages/api-client` | `scheduled/graph/once/success`, `scheduled/job/list`, `scheduled/task/info` | ✅ |
+| 节点用户 / 远程用户密码重置 | Nodes / Account | `packages/api-client` | `user/node/resetPassword`, `user/remote/resetPassword` | ✅ |
+| 节点分页 / 图节点最大索引 / 模型服务详情 | Nodes / DAG / Models | `packages/api-client` | `node/page`, `graph/node/max_index`, `model/serving/detail` | ✅ |
+| 特征数据源 / 云日志 / 投票同步 / 版本 | Feature DS / Logs | `packages/api-client` | `feature_datasource/create`, `feature_datasource/auth/list`, `cloud_log/sls`, `vote_sync/create`, `version/list` | ✅ |
 
 ## 3. 自动化验证
 

@@ -1,7 +1,7 @@
 import { api } from './api';
 import type { components } from './generated/secretpad';
 import { z } from 'zod';
-import {
+import type {
   Node,
   Project,
   DataTable,
@@ -22,59 +22,51 @@ import {
   GraphDetailVO,
   GraphNodeInfo,
   GraphEdge,
-  GraphNodeStatusVO,
   GraphStatus,
   GraphNodeTaskLogsVO,
   GraphNodeOutputVO,
   CompListVO,
   ComponentDef,
   ProjectVO,
-  ProjectVOSchema,
   ProjectJobVO,
-  ProjectJobVOSchema,
   MessageDetailVO,
-  MessageDetailVOSchema,
   ModelExportPackageResponse,
-  ModelExportPackageResponseSchema,
   ModelPartyPathResponse,
-  ModelPartyPathResponseSchema,
   ModelPackDetailVO,
-  ModelPackDetailVOSchema,
   NodeRouterVO,
-  NodeRouterVOSchema,
-  NodeResultsVO,
   AllNodeResultsListVO,
-  AllNodeResultsListVOSchema,
   NodeResultDetailVO,
-  NodeResultDetailVOSchema,
   InstVO,
-  InstVOSchema,
   InstTokenVO,
-  InstTokenVOSchema,
   ProjectParticipantsDetailVO,
-  ProjectParticipantsDetailVOSchema,
   UserContextDTO,
-  UserContextDTOSchema,
   TaskPageScheduledVO,
   DatatableNodeVO,
-  DatatableNodeVOSchema,
   DatasourceDetailAggregateVO,
-  DatasourceDetailAggregateVOSchema,
   DatasourceNodesVO,
-  DatasourceNodesVOSchema,
   UploadDataResultVO,
-  UploadDataResultVOSchema,
   SyncDataDTO,
+} from './schemas';
+import {
+  ProjectVOSchema,
+  ProjectJobVOSchema,
+  MessageDetailVOSchema,
+  ModelExportPackageResponseSchema,
+  ModelPartyPathResponseSchema,
+  ModelPackDetailVOSchema,
+  NodeRouterVOSchema,
+  AllNodeResultsListVOSchema,
+  NodeResultDetailVOSchema,
+  InstVOSchema,
+  InstTokenVOSchema,
+  ProjectParticipantsDetailVOSchema,
+  UserContextDTOSchema,
+  DatatableNodeVOSchema,
+  DatasourceDetailAggregateVOSchema,
+  DatasourceNodesVOSchema,
+  UploadDataResultVOSchema,
   SyncDataDTOSchema,
   NodeSchema,
-  ProjectSchema,
-  MessageVOSchema,
-  PageScheduledVOSchema,
-  GraphMetaVOSchema,
-  GraphDetailVOSchema,
-  GraphStatusSchema,
-  CompListVOSchema,
-  ModelPackVOSchema,
   pageResponseSchema,
 } from './schemas';
 
@@ -229,6 +221,22 @@ export const apiClient = {
       status: n.nodeStatus,
       createTime: n.gmtCreate,
     }));
+  },
+
+  async pageNodes(input: {
+    page?: number;
+    size?: number;
+    search?: string;
+    sort?: Record<string, string>;
+  }): Promise<{ list: components['schemas']['NodeVO'][]; total: number }> {
+    const { data, error } = await api.POST('/api/v1alpha1/node/page', {
+      body: input as components['schemas']['PageNodeRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(
+      data as unknown as SecretPadResponse<{ list?: components['schemas']['NodeVO'][]; total?: number }>
+    );
+    return { list: payload.list || [], total: payload.total || 0 };
   },
 
   async createNode(input: CreateNodeInput): Promise<string> {
@@ -516,6 +524,14 @@ export const apiClient = {
     unwrap(data as unknown as SecretPadResponse<unknown>);
   },
 
+  async getModelServingDetail(servingId: string): Promise<components['schemas']['ServingDetailVO']> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/serving/detail', {
+      body: { servingId } as components['schemas']['QueryModelServingRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<components['schemas']['ServingDetailVO']>);
+  },
+
   async getMessages(ownerId: string, page = 1, size = 100): Promise<MessageVO[]> {
     const { data, error } = await api.POST('/api/v1alpha1/message/list', {
       body: { ownerId, page, size } as components['schemas']['MessageListRequest'],
@@ -687,6 +703,19 @@ export const apiClient = {
     return unwrap(data as unknown as SecretPadResponse<GraphNodeOutputVO>);
   },
 
+  async refreshGraphNodeMaxIndex(
+    projectId: string,
+    graphId: string,
+    currentIndex?: number
+  ): Promise<number> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/node/max_index', {
+      body: { projectId, graphId, currentIndex } as components['schemas']['GraphNodeMaxIndexRefreshRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(data as unknown as SecretPadResponse<{ maxIndex?: number }>);
+    return payload.maxIndex || 0;
+  },
+
   // ============================ project ============================
 
   async updateProject(input: { projectId: string; name?: string; description?: string }): Promise<void> {
@@ -761,6 +790,79 @@ export const apiClient = {
   async stopProjectJob(projectId: string, jobId: string): Promise<void> {
     const { data, error } = await api.POST('/api/v1alpha1/project/job/stop', {
       body: { projectId, jobId } as components['schemas']['StopProjectJobTaskRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getJobTaskLogs(input: { projectId: string; jobId: string; taskId: string }): Promise<GraphNodeTaskLogsVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/job/task/logs', {
+      body: input as components['schemas']['GetProjectJobTaskLogRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<GraphNodeTaskLogsVO>);
+  },
+
+  async getJobTaskOutput(input: {
+    projectId: string;
+    jobId: string;
+    taskId: string;
+    outputId: string;
+  }): Promise<GraphNodeOutputVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/job/task/output', {
+      body: input as components['schemas']['GetProjectJobTaskOutputRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<GraphNodeOutputVO>);
+  },
+
+  async getTeeNodes(): Promise<Node[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/tee/list', { body: {} as never });
+    if (error) throw new Error(apiError(error));
+    const list = unwrap(data as unknown as SecretPadResponse<Node[] | { list?: Node[] }>);
+    return Array.isArray(list) ? list : list.list || [];
+  },
+
+  async getProjectOutTables(projectId: string, graphId: string): Promise<components['schemas']['ProjectOutputVO']> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/getOutTable', {
+      body: { projectId, graphId } as components['schemas']['GetProjectGraphRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<components['schemas']['ProjectOutputVO']>);
+  },
+
+  async updateProjectTableConfig(input: {
+    projectId: string;
+    nodeId: string;
+    datatableId: string;
+    datasourceId?: string;
+    teeNodeId?: string;
+    type?: string;
+    configs?: components['schemas']['TableColumnConfigParam'][];
+  }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/update/tableConfig', {
+      body: input as components['schemas']['AddProjectDatatableRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getProjectDataSources(
+    projectId: string
+  ): Promise<components['schemas']['ProjectGraphDomainDataSourceVO'][]> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/datasource/list', {
+      body: { projectId } as components['schemas']['GetProjectGraphDomainDataSourceRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(
+      data as unknown as SecretPadResponse<components['schemas']['ProjectGraphDomainDataSourceVO'][] | { list?: components['schemas']['ProjectGraphDomainDataSourceVO'][] }>
+    );
+    return Array.isArray(payload) ? payload : payload.list || [];
+  },
+
+  async addProjectInst(projectId: string, instId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/inst/add', {
+      body: { projectId, instId } as components['schemas']['AddInstToProjectRequest'],
     });
     if (error) throw new Error(apiError(error));
     unwrapVoid(data as unknown as SecretPadResponse<unknown>);
@@ -1191,6 +1293,32 @@ export const apiClient = {
     return Boolean(unwrap(data as unknown as SecretPadResponse<boolean>));
   },
 
+  async resetNodeUserPassword(input: {
+    nodeId: string;
+    name: string;
+    passwordHash: string;
+    newPasswordHash: string;
+  }): Promise<string> {
+    const { data, error } = await api.POST('/api/v1alpha1/user/node/resetPassword', {
+      body: input as components['schemas']['ResetNodeUserPwdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<string>);
+  },
+
+  async resetRemoteUserPassword(input: {
+    nodeId: string;
+    name: string;
+    passwordHash: string;
+    newPasswordHash: string;
+  }): Promise<string> {
+    const { data, error } = await api.POST('/api/v1alpha1/user/remote/resetPassword', {
+      body: input as components['schemas']['ResetNodeUserPwdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<string>);
+  },
+
   // ============================ scheduled ============================
 
   async createScheduledGraph(input: {
@@ -1247,6 +1375,40 @@ export const apiClient = {
     });
     if (error) throw new Error(apiError(error));
     unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getScheduledOnceSuccess(projectId: string, graphId: string): Promise<boolean> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/graph/once/success', {
+      body: { projectId, graphId } as components['schemas']['ScheduledGraphOnceSuccessRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const result = unwrap(data as unknown as SecretPadResponse<boolean>);
+    return Boolean(result);
+  },
+
+  async getScheduledJobs(input: {
+    projectId: string;
+    graphId: string;
+    scheduleTaskId: string;
+    pageNum?: number;
+    pageSize?: number;
+  }): Promise<components['schemas']['ProjectJobSummaryVO'][]> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/job/list', {
+      body: input as components['schemas']['ScheduleListProjectJobRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(
+      data as unknown as SecretPadResponse<{ list?: components['schemas']['ProjectJobSummaryVO'][] }>
+    );
+    return payload.list || [];
+  },
+
+  async getScheduledTaskInfo(input: { scheduleId: string; scheduleTaskId: string }): Promise<ProjectJobVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/task/info', {
+      body: input as components['schemas']['TaskInfoScheduledRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(ProjectJobVOSchema, data, 'scheduled/task/info');
   },
 
   // ============================ datatable ============================
@@ -1319,5 +1481,68 @@ export const apiClient = {
     });
     if (error) throw new Error(apiError(error));
     return unwrap(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  // ============================ feature datasource ============================
+
+  async createFeatureDatasource(input: {
+    featureTableName: string;
+    type: string;
+    url: string;
+    ownerId: string;
+    nodeIds: string[];
+    columns: components['schemas']['TableColumnVO'][];
+    datasourceId?: string;
+    desc?: string;
+  }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/feature_datasource/create', {
+      body: input as components['schemas']['CreateFeatureDatasourceRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async listFeatureDatasourceAuth(projectId: string, nodeId: string): Promise<components['schemas']['FeatureDataSourceVO'][]> {
+    const { data, error } = await api.POST('/api/v1alpha1/feature_datasource/auth/list', {
+      body: { projectId, nodeId } as components['schemas']['ListProjectFeatureDatasourceRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const list = unwrap(data as unknown as SecretPadResponse<components['schemas']['FeatureDataSourceVO'][]>);
+    return Array.isArray(list) ? list : [];
+  },
+
+  // ============================ cloud log ============================
+
+  async getCloudLogs(input: {
+    projectId: string;
+    jobId?: string;
+    taskId?: string;
+    graphNodeId?: string;
+    nodeId?: string;
+    queryParties?: boolean;
+  }): Promise<components['schemas']['CloudGraphNodeTaskLogsVO']> {
+    const { data, error } = await api.POST('/api/v1alpha1/cloud_log/sls', {
+      body: input as components['schemas']['GraphNodeCloudLogsRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<components['schemas']['CloudGraphNodeTaskLogsVO']>);
+  },
+
+  // ============================ vote sync ============================
+
+  async createVoteSync(dbSyncRequests: components['schemas']['DbSyncRequest'][]): Promise<unknown> {
+    const { data, error } = await api.POST('/api/v1alpha1/vote_sync/create', {
+      body: { dbSyncRequests } as components['schemas']['VoteSyncRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  // ============================ version ============================
+
+  async listComponentVersions(): Promise<components['schemas']['ComponentVersion']> {
+    const { data, error } = await api.POST('/api/v1alpha1/version/list', { body: {} as never });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<components['schemas']['ComponentVersion']>);
   },
 };

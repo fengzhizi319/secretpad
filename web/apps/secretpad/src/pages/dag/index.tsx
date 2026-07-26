@@ -1,15 +1,16 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Badge, Modal, ConfirmDialog, toast } from '@secretpad/design-system';
-import {
-  apiClient,
+import type {
   GraphMetaVO,
   GraphDetailVO,
   GraphNodeInfo,
   GraphEdge,
   ComponentSummaryDef,
 } from '@secretpad/api-client';
-import { DAGNextWorkspace, DAGNode, DAGEdge, DAGComponentDef } from '@secretpad/dag-next';
+import { apiClient } from '@secretpad/api-client';
+import type { DAGNode, DAGEdge, DAGComponentDef } from '@secretpad/dag-next';
+import { DAGNextWorkspace } from '@secretpad/dag-next';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';

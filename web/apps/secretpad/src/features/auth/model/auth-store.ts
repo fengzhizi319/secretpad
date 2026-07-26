@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { sha256 } from '@secretpad/utils';
-import { apiClient, User, Platform } from '@secretpad/api-client';
+import type { User, Platform } from '@secretpad/api-client';
+import { apiClient } from '@secretpad/api-client';
 
 interface AuthState {
   user: User | null;

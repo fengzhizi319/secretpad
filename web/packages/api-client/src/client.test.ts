@@ -235,3 +235,104 @@ describe('Zod runtime validation failure path', () => {
     await expect(apiClient.listP2pProjects()).rejects.toThrow(/projectId/);
   });
 });
+
+describe('newly migrated endpoints (project/scheduled/user/node/graph/model/misc)', () => {
+  const ok = (data: unknown) =>
+    mockPost.mockResolvedValueOnce({
+      data: { status: { code: 0 }, data },
+      error: undefined,
+      response: new Response(),
+    } as any);
+
+  it('getJobTaskLogs hits project/job/task/logs and unwraps logs', async () => {
+    ok({ status: 'SUCCEEDED', logs: ['task log'] });
+    const res = await apiClient.getJobTaskLogs({ projectId: 'p1', jobId: 'j1', taskId: 't1' });
+    expect(res.logs).toEqual(['task log']);
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/v1alpha1/project/job/task/logs',
+      expect.objectContaining({ body: { projectId: 'p1', jobId: 'j1', taskId: 't1' } })
+    );
+  });
+
+  it('getTeeNodes normalizes both array and wrapped list shapes', async () => {
+    ok([{ nodeId: 'tee-1' }]);
+    expect(await apiClient.getTeeNodes()).toHaveLength(1);
+    ok({ list: [{ nodeId: 'tee-2' }] });
+    expect((await apiClient.getTeeNodes())[0].nodeId).toBe('tee-2');
+  });
+
+  it('getProjectDataSources unwraps datasource list', async () => {
+    ok([{ nodeId: 'alice', dataSources: [{ dataSourceId: 'ds-1' }] }]);
+    const res = await apiClient.getProjectDataSources('p1');
+    expect(res[0].dataSources?.[0].dataSourceId).toBe('ds-1');
+  });
+
+  it('getScheduledOnceSuccess coerces to boolean', async () => {
+    ok(true);
+    expect(await apiClient.getScheduledOnceSuccess('p1', 'g1')).toBe(true);
+  });
+
+  it('getScheduledJobs unwraps paginated job summaries', async () => {
+    ok({ list: [{ jobId: 'j1' }] });
+    const jobs = await apiClient.getScheduledJobs({ projectId: 'p1', graphId: 'g1', scheduleTaskId: 'st1' });
+    expect(jobs[0].jobId).toBe('j1');
+  });
+
+  it('resetNodeUserPassword posts hashed credentials', async () => {
+    ok('reset-ok');
+    const res = await apiClient.resetNodeUserPassword({
+      nodeId: 'alice',
+      name: 'admin',
+      passwordHash: 'old',
+      newPasswordHash: 'new',
+    });
+    expect(res).toBe('reset-ok');
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/v1alpha1/user/node/resetPassword',
+      expect.objectContaining({ body: { nodeId: 'alice', name: 'admin', passwordHash: 'old', newPasswordHash: 'new' } })
+    );
+  });
+
+  it('pageNodes returns list and total', async () => {
+    ok({ list: [{ nodeId: 'n1' }], total: 5 });
+    const res = await apiClient.pageNodes({ page: 1, size: 10 });
+    expect(res.total).toBe(5);
+    expect(res.list).toHaveLength(1);
+  });
+
+  it('refreshGraphNodeMaxIndex returns the max index', async () => {
+    ok({ maxIndex: 7 });
+    expect(await apiClient.refreshGraphNodeMaxIndex('p1', 'g1')).toBe(7);
+  });
+
+  it('getModelServingDetail unwraps serving detail', async () => {
+    ok({ servingId: 's1', status: 'SERVING' });
+    const res = await apiClient.getModelServingDetail('s1');
+    expect(res.servingId).toBe('s1');
+  });
+
+  it('listComponentVersions unwraps version payload', async () => {
+    ok({ secretflowImage: 'secretflow:1.0.0' });
+    const res = await apiClient.listComponentVersions();
+    expect(res.secretflowImage).toBe('secretflow:1.0.0');
+  });
+
+  it('createVoteSync posts db sync requests', async () => {
+    ok({});
+    await apiClient.createVoteSync([{ tableName: 't', operation: 'INSERT' } as any]);
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/v1alpha1/vote_sync/create',
+      expect.objectContaining({ body: { dbSyncRequests: [{ tableName: 't', operation: 'INSERT' }] } })
+    );
+  });
+
+  it('getCloudLogs hits cloud_log/sls', async () => {
+    ok({ logs: ['cloud log'] });
+    const res = await apiClient.getCloudLogs({ projectId: 'p1', jobId: 'j1' });
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/v1alpha1/cloud_log/sls',
+      expect.objectContaining({ body: { projectId: 'p1', jobId: 'j1' } })
+    );
+    expect(res).toBeDefined();
+  });
+});
