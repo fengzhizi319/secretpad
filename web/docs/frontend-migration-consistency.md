@@ -26,7 +26,10 @@
 | 模型产物列表 / 删除 / 详情 | Model Manager | `pages/models` | `model/page`, `model/delete`, `model/info`, `model/serving/*` | ✅ |
 | 消息与审批列表 | Message Center | `pages/messages` | `message/list`, `message/pending` | ✅ |
 | 周期任务列表 / 下线 / 删除 | Periodic Tasks | `pages/periodic-tasks` | `scheduled/page`, `scheduled/offline`, `scheduled/del` | ✅ |
-| DAG 图列表 / 创建 / 删除 / 运行 | DAG Editor | `pages/dag` | `graph/*`, `component/list` | ✅ |
+| DAG 图列表 / 创建 / 删除 / 运行 | DAG Editor | `pages/dag` | `graph/*`, `component/list`, `component/batch`, `component/i18n` | ✅ |
+| DAG 节点拖拽保存 / 算子配置 / 连线 | DAG Editor | `packages/dag-next` | `graph/update`, `graph/node/update` | ✅ |
+| DAG 运行时日志 / 节点输出 | DAG Editor | `packages/dag-next` | `graph/node/logs`, `graph/node/output` | ✅ |
+| DAG 节点状态轮询 | DAG Editor | `pages/dag` | `graph/node/status` | ✅ |
 
 ## 3. 自动化验证
 
@@ -65,8 +68,9 @@ corepack pnpm exec playwright test
 - 登录成功并进入 Dashboard
 - 侧边栏导航至 Nodes 页面
 - 侧边栏导航至 Messages 页面
+- 侧边栏导航至 DAG 页面（Workspace 或空态渲染）
 
-后续随功能迭代继续补充 Projects / DataSources / DataTables 的创建-删除闭环 E2E。
+后续随功能迭代继续补充 Projects / DataSources / DataTables 的创建-删除闭环 E2E，以及 DAG 节点拖拽、保存、运行的端到端覆盖。
 
 ## 4. 开发-生产构建衔接
 
@@ -88,7 +92,8 @@ corepack pnpm exec playwright test
 
 ## 6. 已知限制与后续阶段
 
-- 所有一级页面已接入真实接口，DAG 画布目前支持按项目加载图、展示节点与运行；复杂算子配置、节点拖拽保存、运行时日志需后续逐步增强。
+- 所有一级页面与 DAG 高级能力均已接入真实接口。DAG 画布支持节点拖拽、算子库添加、节点配置/日志/输出面板、连线、保存与运行，并提供节点状态轮询。
+- DAG 算子配置面板当前以通用 JSON 编辑器（`nodeDef`、`config`）呈现，后续可针对高频算子提供更友好的表单化配置。
 - 节点 Token 弹窗目前仅展示，未提供复制按钮；后续可基于 `navigator.clipboard` 增强。
 - 数据表导入当前使用简单的 `name:type` Schema 输入，后续可接入数据源自动拉取元数据。
 - 模型部署、周期任务创建等流程需配合 DAG 训练/打包结果，当前以提示引导用户先完成 DAG 运行。

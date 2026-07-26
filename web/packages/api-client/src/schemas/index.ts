@@ -248,8 +248,25 @@ export const GraphNodeDetailSchema = z.object({
   x: z.number().optional(),
   y: z.number().optional(),
   progress: z.number().optional(),
+  inputs: z.array(z.string()).optional(),
+  outputs: z.array(z.string()).optional(),
+  nodeDef: z.record(z.any()).optional(),
+  parties: z.array(z.record(z.any())).optional(),
+  results: z.array(z.record(z.any())).optional(),
 });
 export type GraphNodeDetail = z.infer<typeof GraphNodeDetailSchema>;
+
+export const GraphNodeInfoSchema = z.object({
+  graphNodeId: z.string().optional(),
+  codeName: z.string().optional(),
+  label: z.string().optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  inputs: z.array(z.string()).optional(),
+  outputs: z.array(z.string()).optional(),
+  nodeDef: z.record(z.any()).optional(),
+});
+export type GraphNodeInfo = z.infer<typeof GraphNodeInfoSchema>;
 
 export const GraphEdgeSchema = z.object({
   edgeId: z.string().optional(),
@@ -260,6 +277,12 @@ export const GraphEdgeSchema = z.object({
 });
 export type GraphEdge = z.infer<typeof GraphEdgeSchema>;
 
+export const GraphDataSourceConfigSchema = z.object({
+  nodeId: z.string().optional(),
+  dataSourceId: z.string().optional(),
+});
+export type GraphDataSourceConfig = z.infer<typeof GraphDataSourceConfigSchema>;
+
 export const GraphDetailVOSchema = z.object({
   graphId: z.string().optional(),
   name: z.string().optional(),
@@ -267,8 +290,45 @@ export const GraphDetailVOSchema = z.object({
   nodes: z.array(GraphNodeDetailSchema).default([]),
   edges: z.array(GraphEdgeSchema).default([]),
   maxParallelism: z.number().optional(),
+  dataSourceConfig: z.array(GraphDataSourceConfigSchema).optional(),
 });
 export type GraphDetailVO = z.infer<typeof GraphDetailVOSchema>;
+
+export const GraphNodeStatusVOSchema = z.object({
+  graphNodeId: z.string().optional(),
+  taskId: z.string().optional(),
+  jobId: z.string().optional(),
+  status: z.string().optional(),
+  progress: z.number().optional(),
+  parties: z.array(z.record(z.any())).optional(),
+});
+export type GraphNodeStatusVO = z.infer<typeof GraphNodeStatusVOSchema>;
+
+export const GraphStatusSchema = z.object({
+  finished: z.boolean().optional(),
+  nodes: z.array(GraphNodeStatusVOSchema).optional(),
+});
+export type GraphStatus = z.infer<typeof GraphStatusSchema>;
+
+export const GraphNodeTaskLogsVOSchema = z.object({
+  status: z.string().optional(),
+  logs: z.array(z.string()).optional(),
+});
+export type GraphNodeTaskLogsVO = z.infer<typeof GraphNodeTaskLogsVOSchema>;
+
+export const GraphNodeOutputVOSchema = z.object({
+  type: z.string().optional(),
+  codeName: z.string().optional(),
+  tabs: z.record(z.any()).optional(),
+  meta: z.record(z.any()).optional(),
+  jobId: z.string().optional(),
+  taskId: z.string().optional(),
+  graphID: z.string().optional(),
+  warning: z.array(z.string()).optional(),
+  gmtCreate: z.string().optional(),
+  gmtModified: z.string().optional(),
+});
+export type GraphNodeOutputVO = z.infer<typeof GraphNodeOutputVOSchema>;
 
 // Component Schema (from /api/v1alpha1/component/*)
 export const ComponentSummaryDefSchema = z.object({
@@ -278,6 +338,17 @@ export const ComponentSummaryDefSchema = z.object({
   version: z.string().optional(),
 });
 export type ComponentSummaryDef = z.infer<typeof ComponentSummaryDefSchema>;
+
+export const ComponentDefSchema = z.object({
+  domain: z.string().optional(),
+  name: z.string().optional(),
+  version: z.string().optional(),
+  desc: z.string().optional(),
+  inputs: z.array(z.record(z.any())).optional(),
+  outputs: z.array(z.record(z.any())).optional(),
+  attrs: z.array(z.record(z.any())).optional(),
+});
+export type ComponentDef = z.infer<typeof ComponentDefSchema>;
 
 export const CompListVOSchema = z.object({
   name: z.string().optional(),

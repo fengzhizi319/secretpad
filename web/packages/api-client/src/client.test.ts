@@ -118,3 +118,62 @@ describe('apiClient.logout', () => {
     expect(localStorage.getItem('secretpad-token')).toBeNull();
   });
 });
+
+describe('apiClient graph operations', () => {
+  it('updates full graph', async () => {
+    mockPost.mockResolvedValueOnce({ data: { status: { code: 0 } }, error: undefined, response: new Response() } as any);
+    await apiClient.updateGraph('proj-1', 'graph-1', [], []);
+    expect(mockPost).toHaveBeenCalledWith('/api/v1alpha1/graph/update', {
+      body: { projectId: 'proj-1', graphId: 'graph-1', nodes: [], edges: [] },
+    });
+  });
+
+  it('updates a single graph node', async () => {
+    mockPost.mockResolvedValueOnce({ data: { status: { code: 0 } }, error: undefined, response: new Response() } as any);
+    const node = { graphNodeId: 'n1', codeName: 'ml.train/sgb_train' };
+    await apiClient.updateGraphNode('proj-1', 'graph-1', node);
+    expect(mockPost).toHaveBeenCalledWith('/api/v1alpha1/graph/node/update', {
+      body: { projectId: 'proj-1', graphId: 'graph-1', node },
+    });
+  });
+
+  it('fetches graph node status', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { status: { code: 0 }, data: { finished: false, nodes: [] } },
+      error: undefined,
+      response: new Response(),
+    } as any);
+    const status = await apiClient.getGraphNodeStatus('proj-1', 'graph-1');
+    expect(status.finished).toBe(false);
+  });
+
+  it('fetches graph node logs', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { status: { code: 0 }, data: { status: 'RUNNING', logs: ['log line'] } },
+      error: undefined,
+      response: new Response(),
+    } as any);
+    const logs = await apiClient.getGraphNodeLogs('proj-1', 'graph-1', 'n1');
+    expect(logs.logs).toEqual(['log line']);
+  });
+
+  it('fetches graph node output', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { status: { code: 0 }, data: { type: 'table', codeName: 'ml.train/sgb_train' } },
+      error: undefined,
+      response: new Response(),
+    } as any);
+    const output = await apiClient.getGraphNodeOutput('proj-1', 'graph-1', 'n1', 'n1-output-0');
+    expect(output.type).toBe('table');
+  });
+
+  it('batch fetches component definitions', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { status: { code: 0 }, data: { 'read_data/datatable': { name: 'read_data' } } },
+      error: undefined,
+      response: new Response(),
+    } as any);
+    const defs = await apiClient.batchGetComponent([{ domain: 'read_data', name: 'datatable' }]);
+    expect(defs['read_data/datatable'].name).toBe('read_data');
+  });
+});

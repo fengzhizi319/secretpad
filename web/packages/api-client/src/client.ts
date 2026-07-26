@@ -19,7 +19,14 @@ import {
   PageScheduledVO,
   GraphMetaVO,
   GraphDetailVO,
+  GraphNodeInfo,
+  GraphEdge,
+  GraphNodeStatusVO,
+  GraphStatus,
+  GraphNodeTaskLogsVO,
+  GraphNodeOutputVO,
   CompListVO,
+  ComponentDef,
 } from './schemas';
 
 type SecretPadResponse<T> = {
@@ -35,6 +42,12 @@ function unwrap<T>(res: SecretPadResponse<T>): T {
     throw new Error('API returned empty data');
   }
   return res.data;
+}
+
+function unwrapVoid(res: SecretPadResponse<unknown>): void {
+  if (res.status && res.status.code !== 0) {
+    throw new Error(res.status.msg || `API error ${res.status.code}`);
+  }
 }
 
 function apiError(error: unknown): string {
@@ -489,5 +502,79 @@ export const apiClient = {
     if (error) throw new Error(apiError(error));
     const payload = unwrap(data as unknown as SecretPadResponse<CompListVO[]>);
     return payload || [];
+  },
+
+  async batchGetComponent(requests: { domain: string; name: string; version?: string; app?: string }[]): Promise<Record<string, ComponentDef>> {
+    const { data, error } = await api.POST('/api/v1alpha1/component/batch', {
+      body: requests as components['schemas']['GetComponentRequest'][],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(data as unknown as SecretPadResponse<Record<string, ComponentDef>>);
+    return payload || {};
+  },
+
+  async listComponentI18n(): Promise<Record<string, string>> {
+    const { data, error } = await api.POST('/api/v1alpha1/component/i18n', { body: {} as any });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(data as unknown as SecretPadResponse<Record<string, string>>);
+    return payload || {};
+  },
+
+  async updateGraph(
+    projectId: string,
+    graphId: string,
+    nodes: GraphNodeInfo[],
+    edges: GraphEdge[],
+    options?: { maxParallelism?: number; dataSourceConfig?: components['schemas']['GraphDataSourceConfig'][] }
+  ): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/update', {
+      body: {
+        projectId,
+        graphId,
+        nodes,
+        edges,
+        maxParallelism: options?.maxParallelism,
+        dataSourceConfig: options?.dataSourceConfig,
+      } as components['schemas']['FullUpdateGraphRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async updateGraphNode(projectId: string, graphId: string, node: GraphNodeInfo): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/node/update', {
+      body: { projectId, graphId, node } as components['schemas']['UpdateGraphNodeRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getGraphNodeStatus(projectId: string, graphId: string): Promise<GraphStatus> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/node/status', {
+      body: { projectId, graphId } as components['schemas']['ListGraphNodeStatusRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<GraphStatus>);
+  },
+
+  async getGraphNodeLogs(projectId: string, graphId: string, graphNodeId: string): Promise<GraphNodeTaskLogsVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/node/logs', {
+      body: { projectId, graphId, graphNodeId } as components['schemas']['GraphNodeLogsRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<GraphNodeTaskLogsVO>);
+  },
+
+  async getGraphNodeOutput(
+    projectId: string,
+    graphId: string,
+    graphNodeId: string,
+    outputId: string
+  ): Promise<GraphNodeOutputVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/node/output', {
+      body: { projectId, graphId, graphNodeId, outputId } as components['schemas']['GraphNodeOutputRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<GraphNodeOutputVO>);
   },
 };
