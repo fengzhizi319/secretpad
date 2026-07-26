@@ -1,27 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useNavigate } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 import { Card, Badge, Button } from '@secretpad/design-system';
-import { apiClient, Node, Project, JobExecution } from '@secretpad/api-client';
+import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
-import { AccessGuard } from '../../features/auth/ui/access-guard';
 
-export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
+export const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [jobs, setJobs] = useState<JobExecution[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    Promise.all([
-      apiClient.getNodes().catch((e) => { setError(e.message); return []; }),
-      apiClient.getProjects().catch((e) => { setError((prev) => prev || e.message); return []; }),
-      apiClient.getJobs().catch((e) => { setError((prev) => prev || e.message); return []; }),
-    ]).then(([n, p, j]) => {
-      setNodes(n);
-      setProjects(p);
-      setJobs(j);
-    });
-  }, []);
+  const nodesQuery = useQuery({
+    queryKey: ['nodes'],
+    queryFn: () => apiClient.getNodes(),
+  });
+  const projectsQuery = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => apiClient.getProjects(),
+  });
+  const jobsQuery = useQuery({
+    queryKey: ['recent-jobs'],
+    queryFn: () => apiClient.getJobs(),
+  });
+
+  const nodes = nodesQuery.data ?? [];
+  const projects = projectsQuery.data ?? [];
+  const jobs = jobsQuery.data ?? [];
+  const error =
+    nodesQuery.error?.message || projectsQuery.error?.message || jobsQuery.error?.message || null;
 
   const readyNodes = nodes.filter((n) => n.nodeStatus === 'Ready' || n.status === 'Ready').length;
 
@@ -86,7 +91,7 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
         <div className="lg:col-span-2 space-y-6">
           <Card
             title={t('dashboard.recentJobs')}
-            extra={<Button size="sm" variant="link" onClick={() => onNavigate('/dag')}>{t('dashboard.launchDag')}</Button>}
+            extra={<Button size="sm" variant="link" onClick={() => navigate({ to: '/dag' })}>{t('dashboard.launchDag')}</Button>}
           >
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
               {jobs.length === 0 && (
@@ -116,7 +121,7 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
 
           <Card
             title={t('dashboard.activeProjects')}
-            extra={<Button size="sm" variant="link" onClick={() => onNavigate('/projects')}>{t('dashboard.viewAllProjects')}</Button>}
+            extra={<Button size="sm" variant="link" onClick={() => navigate({ to: '/projects' })}>{t('dashboard.viewAllProjects')}</Button>}
           >
             <div className="space-y-3">
               {projects.length === 0 && (
@@ -125,7 +130,7 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
               {projects.map((proj) => (
                 <div
                   key={proj.projectId}
-                  onClick={() => onNavigate('/projects')}
+                  onClick={() => navigate({ to: '/projects' })}
                   className="p-3.5 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-blue-500/40 bg-gray-50/50 dark:bg-gray-850/50 cursor-pointer transition-all flex items-center justify-between"
                 >
                   <div>
@@ -173,16 +178,16 @@ export const DashboardPage: React.FC<{ onNavigate: (path: string) => void }> = (
 
           <Card title={t('dashboard.quickActions')}>
             <div className="grid grid-cols-2 gap-2.5">
-              <Button onClick={() => onNavigate('/dag')} variant="outline" className="justify-start text-xs p-3">
+              <Button onClick={() => navigate({ to: '/dag' })} variant="outline" className="justify-start text-xs p-3">
                 ⚡ {t('dashboard.createDag')}
               </Button>
-              <Button onClick={() => onNavigate('/projects')} variant="outline" className="justify-start text-xs p-3">
+              <Button onClick={() => navigate({ to: '/projects' })} variant="outline" className="justify-start text-xs p-3">
                 ➕ {t('dashboard.newProject')}
               </Button>
-              <Button onClick={() => onNavigate('/data-tables')} variant="outline" className="justify-start text-xs p-3">
+              <Button onClick={() => navigate({ to: '/data-tables' })} variant="outline" className="justify-start text-xs p-3">
                 🗄️ {t('dashboard.importTable')}
               </Button>
-              <Button onClick={() => onNavigate('/nodes')} variant="outline" className="justify-start text-xs p-3">
+              <Button onClick={() => navigate({ to: '/nodes' })} variant="outline" className="justify-start text-xs p-3">
                 🖥️ {t('dashboard.registerNode')}
               </Button>
             </div>

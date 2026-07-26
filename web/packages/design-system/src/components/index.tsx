@@ -161,3 +161,133 @@ export const Modal: React.FC<ModalProps> = ({
     </div>
   );
 };
+
+// Toast Component (global imperative API)
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
+
+export interface ToastItem {
+  id: number;
+  type: ToastType;
+  message: React.ReactNode;
+  duration: number;
+}
+
+type ToastListener = (item: ToastItem) => void;
+
+let toastId = 0;
+const toastListeners = new Set<ToastListener>();
+
+function emitToast(type: ToastType, message: React.ReactNode, duration = 3000) {
+  const item: ToastItem = { id: ++toastId, type, message, duration };
+  toastListeners.forEach((listener) => listener(item));
+}
+
+/** Imperative global toast API. Requires a mounted <ToastContainer />. */
+export const toast = {
+  success: (message: React.ReactNode, duration?: number) => emitToast('success', message, duration),
+  error: (message: React.ReactNode, duration?: number) => emitToast('error', message, duration),
+  info: (message: React.ReactNode, duration?: number) => emitToast('info', message, duration),
+  warning: (message: React.ReactNode, duration?: number) => emitToast('warning', message, duration),
+};
+
+const TOAST_TYPE_STYLES: Record<ToastType, string> = {
+  success: 'border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300',
+  error: 'border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300',
+  info: 'border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300',
+  warning: 'border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
+};
+
+const TOAST_TYPE_ICONS: Record<ToastType, string> = {
+  success: '✓',
+  error: '✕',
+  info: 'ℹ',
+  warning: '⚠',
+};
+
+/** Mount once near the app root to render toasts emitted via the `toast` API. */
+export const ToastContainer: React.FC = () => {
+  const [items, setItems] = React.useState<ToastItem[]>([]);
+
+  React.useEffect(() => {
+    const listener: ToastListener = (item) => {
+      setItems((prev) => [...prev, item]);
+      window.setTimeout(() => {
+        setItems((prev) => prev.filter((t) => t.id !== item.id));
+      }, item.duration);
+    };
+    toastListeners.add(listener);
+    return () => {
+      toastListeners.delete(listener);
+    };
+  }, []);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm">
+      {items.map((item) => (
+        <div
+          key={item.id}
+          className={`flex items-start gap-2.5 px-4 py-3 rounded-lg border shadow-lg bg-white dark:bg-gray-900 text-sm animate-fadeIn ${TOAST_TYPE_STYLES[item.type]}`}
+          role="alert"
+        >
+          <span className="font-bold leading-5">{TOAST_TYPE_ICONS[item.type]}</span>
+          <span className="leading-5 break-all">{item.message}</span>
+          <button
+            onClick={() => setItems((prev) => prev.filter((t) => t.id !== item.id))}
+            className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors leading-5"
+            aria-label="close"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ConfirmDialog Component (based on Modal)
+export interface ConfirmDialogProps {
+  isOpen: boolean;
+  title?: React.ReactNode;
+  message: React.ReactNode;
+  confirmText?: React.ReactNode;
+  cancelText?: React.ReactNode;
+  danger?: boolean;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+  isOpen,
+  title,
+  message,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  danger = false,
+  loading = false,
+  onConfirm,
+  onCancel,
+}) => {
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onCancel}
+      title={title}
+      width="max-w-md"
+      footer={
+        <>
+          <Button variant="outline" onClick={onCancel} disabled={loading}>
+            {cancelText}
+          </Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
+            {confirmText}
+          </Button>
+        </>
+      }
+    >
+      <div className="text-sm text-gray-600 dark:text-gray-300 leading-6">{message}</div>
+    </Modal>
+  );
+};

@@ -1,16 +1,17 @@
 import React from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '../features/auth/model/auth-store';
 import { Button } from '@secretpad/design-system';
 import { Locale, useTranslation } from '../shared/lib/i18n';
 
 export interface AppHeaderProps {
   title?: string;
-  onNavigate?: (path: string) => void;
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Console Overview', onNavigate }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Console Overview' }) => {
   const { user, platform, theme, toggleTheme, logout } = useAuthStore();
   const { t, locale, setLocale } = useTranslation();
+  const navigate = useNavigate();
 
   return (
     <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 flex items-center justify-between flex-shrink-0">
@@ -43,7 +44,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Console Overview'
         </Button>
 
         <button
-          onClick={() => onNavigate && onNavigate('/messages')}
+          onClick={() => navigate({ to: '/messages' })}
           className="relative p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         >
           🔔

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Card, Button, Badge, Modal } from '@secretpad/design-system';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Button, Badge, Modal, ConfirmDialog, toast } from '@secretpad/design-system';
 import { apiClient, Node, CreateNodeInput, UpdateNodeInput } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
@@ -9,10 +10,9 @@ const MODE_MAP: Record<string, number> = { MPC: 0, TEE: 1, BOTH: 2 };
 
 export const NodesPage: React.FC = () => {
   const { t } = useTranslation();
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
 
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNode, setEditingNode] = useState<Node | null>(null);
   const [nodeName, setNodeName] = useState('');
@@ -20,16 +20,66 @@ export const NodesPage: React.FC = () => {
   const [netAddress, setNetAddress] = useState('');
   const [tokenModalNode, setTokenModalNode] = useState<Node | null>(null);
   const [token, setToken] = useState<{ token?: string; tokenStatus?: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Node | null>(null);
+  const [resetTokenTarget, setResetTokenTarget] = useState<Node | null>(null);
 
-  const loadNodes = () => {
-    apiClient.getNodes()
-      .then(setNodes)
-      .catch((e) => setError(e.message));
-  };
+  const nodesQuery = useQuery({
+    queryKey: ['nodes'],
+    queryFn: () => apiClient.getNodes(),
+  });
+  const nodes = nodesQuery.data ?? [];
 
-  useEffect(() => {
-    loadNodes();
-  }, []);
+  const invalidateNodes = () => queryClient.invalidateQueries({ queryKey: ['nodes'] });
+
+  const saveMutation = useMutation({
+    mutationFn: (input: { editing: Node | null }) => {
+      if (input.editing) {
+        const update: UpdateNodeInput = { nodeId: input.editing.nodeId, netAddress };
+        return apiClient.updateNode(update);
+      }
+      const create: CreateNodeInput = { name: nodeName, mode: MODE_MAP[nodeMode] };
+      return apiClient.createNode(create);
+    },
+    onSuccess: () => {
+      setIsModalOpen(false);
+      resetForm();
+      invalidateNodes();
+      toast.success(t('common.save'));
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (nodeId: string) => apiClient.deleteNode(nodeId),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      invalidateNodes();
+      toast.success(t('common.delete'));
+    },
+    onError: (e) => {
+      setDeleteTarget(null);
+      setError(e instanceof Error ? e.message : String(e));
+    },
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: (nodeId: string) => apiClient.refreshNode(nodeId),
+    onSuccess: invalidateNodes,
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
+
+  const resetTokenMutation = useMutation({
+    mutationFn: (nodeId: string) => apiClient.newNodeToken(nodeId),
+    onSuccess: (res) => {
+      setResetTokenTarget(null);
+      setToken(res);
+      toast.success(t('nodes.resetTokenSuccess'));
+    },
+    onError: (e) => {
+      setResetTokenTarget(null);
+      setError(e instanceof Error ? e.message : String(e));
+    },
+  });
 
   const resetForm = () => {
     setNodeName('');
@@ -51,60 +101,34 @@ export const NodesPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
-    try {
-      if (editingNode) {
-        const input: UpdateNodeInput = {
-          nodeId: editingNode.nodeId,
-          netAddress,
-        };
-        await apiClient.updateNode(input);
-      } else {
-        const input: CreateNodeInput = {
-          name: nodeName,
-          mode: MODE_MAP[nodeMode],
-        };
-        await apiClient.createNode(input);
-      }
-      setIsModalOpen(false);
-      resetForm();
-      loadNodes();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
+    saveMutation.mutate({ editing: editingNode });
   };
 
-  const handleDelete = async (node: Node) => {
-    if (!window.confirm(t('nodes.deleteConfirm'))) return;
-    try {
-      await apiClient.deleteNode(node.nodeId);
-      loadNodes();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const handleRefresh = async (node: Node) => {
-    try {
-      await apiClient.refreshNode(node.nodeId);
-      loadNodes();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const handleRefresh = (node: Node) => {
+    refreshMutation.mutate(node.nodeId);
   };
 
   const handleViewToken = async (node: Node) => {
     setTokenModalNode(node);
+    setToken(null);
     try {
       const res = await apiClient.getNodeToken(node.nodeId);
       setToken(res);
     } catch (e) {
       setToken({ token: e instanceof Error ? e.message : String(e), tokenStatus: 'ERROR' });
+    }
+  };
+
+  const handleCopyToken = async () => {
+    if (!token?.token) return;
+    try {
+      await navigator.clipboard.writeText(token.token);
+      toast.success(t('nodes.tokenCopied'));
+    } catch {
+      toast.error(t('nodes.tokenCopied'));
     }
   };
 
@@ -121,9 +145,9 @@ export const NodesPage: React.FC = () => {
         </AccessGuard>
       </div>
 
-      {error && (
+      {(error || nodesQuery.error) && (
         <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg px-4 py-2">
-          {t('common.error', { message: error })}
+          {t('common.error', { message: error || nodesQuery.error?.message || '' })}
         </div>
       )}
 
@@ -170,7 +194,7 @@ export const NodesPage: React.FC = () => {
                       <AccessGuard access={{ types: [Platform.CENTER] }}>
                         <Button size="sm" variant="ghost" onClick={() => openEdit(node)}>{t('nodes.edit')}</Button>
                         <Button size="sm" variant="ghost" onClick={() => handleViewToken(node)}>{t('nodes.token')}</Button>
-                        <Button size="sm" variant="danger" onClick={() => handleDelete(node)}>{t('nodes.delete')}</Button>
+                        <Button size="sm" variant="danger" onClick={() => setDeleteTarget(node)}>{t('nodes.delete')}</Button>
                       </AccessGuard>
                     </div>
                   </td>
@@ -189,7 +213,7 @@ export const NodesPage: React.FC = () => {
         footer={
           <>
             <Button variant="ghost" onClick={() => { setIsModalOpen(false); resetForm(); }}>{t('common.cancel')}</Button>
-            <Button variant="primary" onClick={handleSubmit} loading={loading}>{t('common.confirm')}</Button>
+            <Button variant="primary" onClick={handleSubmit} loading={saveMutation.isPending}>{t('common.confirm')}</Button>
           </>
         }
       >
@@ -245,7 +269,18 @@ export const NodesPage: React.FC = () => {
         onClose={() => { setTokenModalNode(null); setToken(null); }}
         title={tokenModalNode ? `${t('nodes.token')} - ${tokenModalNode.nodeName}` : t('nodes.token')}
         footer={
-          <Button variant="primary" onClick={() => { setTokenModalNode(null); setToken(null); }}>{t('common.close')}</Button>
+          <>
+            <Button variant="outline" onClick={handleCopyToken} disabled={!token?.token}>📋 {t('nodes.copyToken')}</Button>
+            <AccessGuard access={{ types: [Platform.CENTER] }}>
+              <Button
+                variant="ghost"
+                onClick={() => tokenModalNode && setResetTokenTarget(tokenModalNode)}
+              >
+                {t('nodes.resetToken')}
+              </Button>
+            </AccessGuard>
+            <Button variant="primary" onClick={() => { setTokenModalNode(null); setToken(null); }}>{t('common.close')}</Button>
+          </>
         }
       >
         <div className="text-xs space-y-2">
@@ -258,6 +293,32 @@ export const NodesPage: React.FC = () => {
           />
         </div>
       </Modal>
+
+      {/* Delete Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title={t('nodes.delete')}
+        message={t('nodes.deleteConfirm')}
+        danger
+        loading={deleteMutation.isPending}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.nodeId)}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Reset Token Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={!!resetTokenTarget}
+        title={t('nodes.resetToken')}
+        message={t('nodes.resetTokenConfirm')}
+        danger
+        loading={resetTokenMutation.isPending}
+        confirmText={t('nodes.resetToken')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => resetTokenTarget && resetTokenMutation.mutate(resetTokenTarget.nodeId)}
+        onCancel={() => setResetTokenTarget(null)}
+      />
     </div>
   );
 };

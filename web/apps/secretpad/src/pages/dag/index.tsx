@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Card, Button, Badge, Modal } from '@secretpad/design-system';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Button, Badge, Modal, ConfirmDialog, toast } from '@secretpad/design-system';
 import {
   apiClient,
-  Project,
   GraphMetaVO,
   GraphDetailVO,
   GraphNodeInfo,
@@ -13,29 +13,6 @@ import { DAGNextWorkspace, DAGNode, DAGEdge, DAGComponentDef } from '@secretpad/
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
-
-const IO_COMPONENTS: DAGComponentDef[] = [
-  { domain: 'read_data', name: 'datatable', icon: '📥' },
-];
-
-const PRIVACY_COMPONENTS: DAGComponentDef[] = [
-  { domain: 'preprocessing', name: 'psi', icon: '🔒' },
-  { domain: 'privacy', name: 'dp_noise', icon: '🛡️' },
-];
-
-const ML_COMPONENTS: DAGComponentDef[] = [
-  { domain: 'ml.train', name: 'sgb_train', icon: '🤖' },
-  { domain: 'ml.train', name: 'ss_glm_train', icon: '📊' },
-  { domain: 'ml.train', name: 'ss_xgb_train', icon: '🌲' },
-  { domain: 'ml.train', name: 'ss_sgd_train', icon: '⚡' },
-  { domain: 'ml.predict', name: 'sgb_predict', icon: '🔮' },
-];
-
-const DEFAULT_COMPONENT_GROUPS: Record<string, DAGComponentDef[]> = {
-  'Data I/O': IO_COMPONENTS,
-  'Privacy & PSI': PRIVACY_COMPONENTS,
-  'Machine Learning': ML_COMPONENTS,
-};
 
 function normalizeCodeName(codeName?: string): { domain: string; name: string } {
   if (!codeName) return { domain: 'unknown', name: 'unknown' };
@@ -117,20 +94,16 @@ function mapDAGEdgeToGraphEdge(edge: DAGEdge): GraphEdge {
 
 export const DAGPage: React.FC = () => {
   const { t } = useTranslation();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const queryClient = useQueryClient();
+
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
-  const [graphs, setGraphs] = useState<GraphMetaVO[]>([]);
-  const [selectedGraph, setSelectedGraph] = useState<GraphMetaVO | null>(null);
-  const [graphDetail, setGraphDetail] = useState<GraphDetailVO | null>(null);
-  const [components, setComponents] = useState<ComponentSummaryDef[]>([]);
-  const [i18nMap, setI18nMap] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
+  const [selectedGraphId, setSelectedGraphId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newGraphName, setNewGraphName] = useState('');
-  const [componentGroups, setComponentGroups] = useState<Record<string, DAGComponentDef[]>>(DEFAULT_COMPONENT_GROUPS);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [deleteGraphTarget, setDeleteGraphTarget] = useState<GraphMetaVO | null>(null);
 
   const dagLabels = useMemo(
     () => ({
@@ -158,168 +131,144 @@ export const DAGPage: React.FC = () => {
       refresh: t('common.search'),
       nodeOutput: t('dag.output'),
       deleteNode: t('common.delete'),
+      emptyCanvas: t('dag.emptyCanvas'),
     }),
     [t]
   );
 
-  useEffect(() => {
-    apiClient
-      .getProjects()
-      .then((ps) => {
-        setProjects(ps);
-        if (ps.length > 0) {
-          setSelectedProjectId(ps[0].projectId);
-        }
-      })
-      .catch((e) => setError(e.message));
+  const projectsQuery = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => apiClient.getProjects(),
+  });
+  const projects = projectsQuery.data ?? [];
 
-    apiClient
-      .getComponents()
-      .then((list) => {
-        const all: ComponentSummaryDef[] = [];
-        const groups: Record<string, DAGComponentDef[]> = {};
-        list.forEach((group) => {
-          const groupName = group.name || 'Components';
-          const defs: DAGComponentDef[] = [];
-          (group.comps || []).forEach((c) => {
-            all.push(c);
-            defs.push({
-              domain: c.domain || 'unknown',
-              name: c.name || 'unknown',
-              version: c.version,
-              desc: c.desc,
-              icon: c.domain?.startsWith('ml') ? '🤖' : '⚙️',
-            });
+  // Default the selected project to the first one once projects load.
+  useEffect(() => {
+    if (!selectedProjectId && projects.length > 0) {
+      setSelectedProjectId(projects[0].projectId);
+    }
+  }, [projects, selectedProjectId]);
+
+  const componentsQuery = useQuery({
+    queryKey: ['components'],
+    queryFn: async () => {
+      const list = await apiClient.getComponents();
+      const all: ComponentSummaryDef[] = [];
+      const groups: Record<string, DAGComponentDef[]> = {};
+      list.forEach((group) => {
+        const groupName = group.name || 'Components';
+        const defs: DAGComponentDef[] = [];
+        (group.comps || []).forEach((c) => {
+          all.push(c);
+          defs.push({
+            domain: c.domain || 'unknown',
+            name: c.name || 'unknown',
+            version: c.version,
+            desc: c.desc,
+            icon: c.domain?.startsWith('ml') ? '🤖' : '⚙️',
           });
-          if (defs.length) groups[groupName] = defs;
         });
-        setComponents(all);
-        if (Object.keys(groups).length > 0) {
-          setComponentGroups(groups);
-        }
-      })
-      .catch(() => setComponents([]));
+        if (defs.length) groups[groupName] = defs;
+      });
+      return { all, groups };
+    },
+  });
+  const components = componentsQuery.data?.all ?? [];
+  const componentGroups = componentsQuery.data?.groups ?? {};
 
-    apiClient
-      .listComponentI18n()
-      .then(setI18nMap)
-      .catch(() => setI18nMap({}));
-  }, []);
+  const i18nQuery = useQuery({
+    queryKey: ['component-i18n'],
+    queryFn: () => apiClient.listComponentI18n(),
+  });
+  const i18nMap = i18nQuery.data ?? {};
 
-  const loadGraphs = useCallback(() => {
-    if (!selectedProjectId) return;
-    setLoading(true);
-    apiClient
-      .getGraphs(selectedProjectId)
-      .then((gs) => {
-        setGraphs(gs);
-        if (gs.length > 0 && !selectedGraph) {
-          setSelectedGraph(gs[0]);
-        } else if (gs.length === 0) {
-          setSelectedGraph(null);
-          setGraphDetail(null);
-        }
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [selectedProjectId, selectedGraph]);
+  const graphsQuery = useQuery({
+    queryKey: ['graphs', selectedProjectId],
+    queryFn: () => apiClient.getGraphs(selectedProjectId),
+    enabled: !!selectedProjectId,
+  });
+  const graphs = graphsQuery.data ?? [];
+  const selectedGraph: GraphMetaVO | null =
+    graphs.find((g) => g.graphId === selectedGraphId) ?? graphs[0] ?? null;
 
-  useEffect(() => {
-    loadGraphs();
-  }, [loadGraphs]);
+  // Poll the graph detail while any node is running (replaces setInterval).
+  const graphDetailQuery = useQuery({
+    queryKey: ['graph-detail', selectedProjectId, selectedGraph?.graphId],
+    queryFn: () => apiClient.getGraphDetail(selectedProjectId, selectedGraph!.graphId!),
+    enabled: !!selectedProjectId && !!selectedGraph?.graphId,
+    refetchInterval: (query) => {
+      const hasRunning = query.state.data?.nodes?.some((n) => n.status === 'RUNNING');
+      return hasRunning ? 3000 : false;
+    },
+  });
+  const graphDetail = graphDetailQuery.data ?? null;
 
-  useEffect(() => {
-    if (!selectedProjectId || !selectedGraph?.graphId) {
-      setGraphDetail(null);
-      return;
-    }
-    setLoading(true);
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-    apiClient
-      .getGraphDetail(selectedProjectId, selectedGraph.graphId)
-      .then(setGraphDetail)
-      .catch((e) => {
-        if (e.name !== 'AbortError') {
-          setError(e.message);
-        }
-      })
-      .finally(() => setLoading(false));
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, [selectedProjectId, selectedGraph?.graphId]);
+  const invalidateGraphs = () =>
+    queryClient.invalidateQueries({ queryKey: ['graphs', selectedProjectId] });
 
-  // Poll node status when graph has running nodes
-  useEffect(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-    if (!selectedProjectId || !selectedGraph?.graphId) return;
-    const hasRunning = graphDetail?.nodes?.some((n) => n.status === 'RUNNING');
-    if (!hasRunning) return;
-
-    pollingRef.current = setInterval(async () => {
-      try {
-        const status = await apiClient.getGraphNodeStatus(selectedProjectId, selectedGraph.graphId!);
-        setGraphDetail((prev) => {
-          if (!prev) return prev;
-          const statusMap = new Map((status.nodes || []).map((s) => [s.graphNodeId, s]));
-          return {
-            ...prev,
-            nodes: prev.nodes.map((n) => {
-              const s = statusMap.get(n.graphNodeId);
-              if (!s) return n;
-              return { ...n, status: s.status, progress: s.progress };
-            }),
-          };
-        });
-        if (status.finished && pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
-      } catch {
-        // ignore polling errors
-      }
-    }, 3000);
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-  }, [selectedProjectId, selectedGraph?.graphId, graphDetail?.nodes]);
-
-  const handleCreateGraph = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProjectId || !newGraphName.trim()) return;
-    try {
-      await apiClient.createGraph({ projectId: selectedProjectId, name: newGraphName });
+  const createGraphMutation = useMutation({
+    mutationFn: () => apiClient.createGraph({ projectId: selectedProjectId, name: newGraphName }),
+    onSuccess: () => {
       setIsCreateModalOpen(false);
       setNewGraphName('');
-      loadGraphs();
-    } catch (e) {
+      invalidateGraphs();
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
+
+  const deleteGraphMutation = useMutation({
+    mutationFn: (graph: GraphMetaVO) => apiClient.deleteGraph(selectedProjectId, graph.graphId!),
+    onSuccess: (_data, graph) => {
+      if (selectedGraph?.graphId === graph.graphId) {
+        setSelectedGraphId('');
+      }
+      setDeleteGraphTarget(null);
+      invalidateGraphs();
+      queryClient.invalidateQueries({ queryKey: ['graph-detail', selectedProjectId, graph.graphId] });
+    },
+    onError: (e) => {
+      setDeleteGraphTarget(null);
       setError(e instanceof Error ? e.message : String(e));
-    }
+    },
+  });
+
+  const stopGraphMutation = useMutation({
+    mutationFn: () => apiClient.stopGraph(selectedProjectId, selectedGraph!.graphId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['graph-detail', selectedProjectId, selectedGraph?.graphId],
+      });
+      toast.success(t('dag.stopSuccess'));
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
+
+  const renameGraphMutation = useMutation({
+    mutationFn: () => apiClient.renameGraph(selectedProjectId, selectedGraph!.graphId!, renameValue),
+    onSuccess: () => {
+      setIsRenameModalOpen(false);
+      invalidateGraphs();
+      toast.success(t('dag.renameSuccess'));
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
+
+  const handleCreateGraph = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProjectId || !newGraphName.trim()) return;
+    setError(null);
+    createGraphMutation.mutate();
   };
 
-  const handleDeleteGraph = async (graph: GraphMetaVO) => {
+  const handleDeleteGraph = (graph: GraphMetaVO) => {
     if (!selectedProjectId || !graph.graphId) return;
-    if (!window.confirm(t('dag.deleteConfirm'))) return;
-    try {
-      await apiClient.deleteGraph(selectedProjectId, graph.graphId);
-      if (selectedGraph?.graphId === graph.graphId) {
-        setSelectedGraph(null);
-        setGraphDetail(null);
-      }
-      loadGraphs();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+    setDeleteGraphTarget(graph);
+  };
+
+  const openRename = () => {
+    if (!selectedGraph) return;
+    setRenameValue(selectedGraph.name || '');
+    setIsRenameModalOpen(true);
   };
 
   const handleSaveGraph = async (nodes: DAGNode[], edges: DAGEdge[]) => {
@@ -345,7 +294,11 @@ export const DAGPage: React.FC = () => {
         selectedGraph.graphId,
         nodes.map((n) => n.id)
       );
-      alert(t('dag.started', { jobId }));
+      // Kick off status polling by refreshing the graph detail.
+      queryClient.invalidateQueries({
+        queryKey: ['graph-detail', selectedProjectId, selectedGraph.graphId],
+      });
+      toast.success(t('dag.started', { jobId }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       throw e;
@@ -435,6 +388,16 @@ export const DAGPage: React.FC = () => {
 
   const { nodes, edges } = mapGraphToDAG(graphDetail || undefined);
 
+  const hasRunningNodes = (graphDetail?.nodes || []).some((n) => n.status === 'RUNNING');
+
+  const loading = graphsQuery.isLoading || graphDetailQuery.isLoading;
+  const queryError =
+    graphsQuery.error?.message ||
+    graphDetailQuery.error?.message ||
+    projectsQuery.error?.message ||
+    componentsQuery.error?.message ||
+    null;
+
   return (
     <div className="space-y-4 h-full flex flex-col">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
@@ -447,8 +410,7 @@ export const DAGPage: React.FC = () => {
             value={selectedProjectId}
             onChange={(e) => {
               setSelectedProjectId(e.target.value);
-              setSelectedGraph(null);
-              setGraphDetail(null);
+              setSelectedGraphId('');
             }}
             className="px-3 py-1.5 rounded-lg text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
           >
@@ -461,10 +423,7 @@ export const DAGPage: React.FC = () => {
 
           <select
             value={selectedGraph?.graphId || ''}
-            onChange={(e) => {
-              const g = graphs.find((x) => x.graphId === e.target.value) || null;
-              setSelectedGraph(g);
-            }}
+            onChange={(e) => setSelectedGraphId(e.target.value)}
             className="px-3 py-1.5 rounded-lg text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
           >
             {graphs.map((g) => (
@@ -478,6 +437,16 @@ export const DAGPage: React.FC = () => {
             <Button variant="primary" size="sm" onClick={() => setIsCreateModalOpen(true)}>
               {t('dag.create')}
             </Button>
+            {selectedGraph && (
+              <Button variant="outline" size="sm" onClick={openRename}>
+                {t('dag.rename')}
+              </Button>
+            )}
+            {hasRunningNodes && (
+              <Button variant="outline" size="sm" loading={stopGraphMutation.isPending} onClick={() => stopGraphMutation.mutate()}>
+                ⏹ {t('dag.stop')}
+              </Button>
+            )}
             <Button variant="danger" size="sm" onClick={() => selectedGraph && handleDeleteGraph(selectedGraph)}>
               {t('common.delete')}
             </Button>
@@ -485,9 +454,9 @@ export const DAGPage: React.FC = () => {
         </div>
       </div>
 
-      {error && (
+      {(error || queryError) && (
         <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg px-4 py-2">
-          {t('common.error', { message: error })}
+          {t('common.error', { message: error || queryError || '' })}
         </div>
       )}
 
@@ -558,7 +527,7 @@ export const DAGPage: React.FC = () => {
             >
               {t('common.cancel')}
             </Button>
-            <Button variant="primary" onClick={handleCreateGraph}>
+            <Button variant="primary" onClick={handleCreateGraph} loading={createGraphMutation.isPending}>
               {t('common.create')}
             </Button>
           </>
@@ -578,6 +547,43 @@ export const DAGPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Rename Graph Modal */}
+      <Modal
+        isOpen={isRenameModalOpen}
+        onClose={() => setIsRenameModalOpen(false)}
+        title={t('dag.renameTitle')}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setIsRenameModalOpen(false)}>{t('common.cancel')}</Button>
+            <Button variant="primary" onClick={() => renameGraphMutation.mutate()} loading={renameGraphMutation.isPending} disabled={!renameValue.trim()}>{t('common.save')}</Button>
+          </>
+        }
+      >
+        <div className="text-xs">
+          <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">{t('dag.nameLabel')}</label>
+          <input
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            className="w-full p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
+            required
+          />
+        </div>
+      </Modal>
+
+      {/* Delete Graph Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={!!deleteGraphTarget}
+        title={t('common.delete')}
+        message={t('dag.deleteConfirm')}
+        danger
+        loading={deleteGraphMutation.isPending}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => deleteGraphTarget && deleteGraphMutation.mutate(deleteGraphTarget)}
+        onCancel={() => setDeleteGraphTarget(null)}
+      />
     </div>
   );
 };

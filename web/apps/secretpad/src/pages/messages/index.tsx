@@ -1,55 +1,97 @@
-import React, { useEffect, useState } from 'react';
-import { Card, Badge, Button } from '@secretpad/design-system';
-import { apiClient, MessageVO, User } from '@secretpad/api-client';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Badge, Button, Modal, toast } from '@secretpad/design-system';
+import { apiClient, User, MessageVO } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { useAuthStore } from '../../features/auth/model/auth-store';
 
+const PENDING_STATUSES = ['PENDING', 'WAITING', 'REVIEWING'];
+
 export const MessagesPage: React.FC = () => {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const [messages, setMessages] = useState<MessageVO[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const ownerId = (user as User | null)?.ownerId || '';
 
-  const loadMessages = () => {
-    if (!ownerId) return;
-    setLoading(true);
-    setError(null);
-    Promise.all([
-      apiClient.getMessages(ownerId, 1, 100),
-      apiClient.getPendingMessageCount(ownerId),
-    ])
-      .then(([list, count]) => {
-        setMessages(list);
-        setPendingCount(count);
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+  const [replyTarget, setReplyTarget] = useState<MessageVO | null>(null);
+  const [replyReason, setReplyReason] = useState('');
+  const [detailTarget, setDetailTarget] = useState<MessageVO | null>(null);
+
+  const messagesQuery = useQuery({
+    queryKey: ['messages', ownerId],
+    queryFn: () => apiClient.getMessages(ownerId, 1, 100),
+    enabled: !!ownerId,
+  });
+  const messages = messagesQuery.data ?? [];
+
+  const pendingCountQuery = useQuery({
+    queryKey: ['pending-message-count', ownerId],
+    queryFn: () => apiClient.getPendingMessageCount(ownerId),
+    enabled: !!ownerId,
+  });
+  const pendingCount = pendingCountQuery.data ?? 0;
+
+  const detailQuery = useQuery({
+    queryKey: ['message-detail', detailTarget?.voteID],
+    queryFn: () =>
+      apiClient.getMessageDetail({
+        ownerId,
+        voteId: detailTarget!.voteID!,
+        isInitiator: false,
+        voteType: detailTarget!.type || '',
+      }),
+    enabled: !!detailTarget && !!detailTarget.voteID,
+  });
+
+  const invalidateMessages = () => {
+    queryClient.invalidateQueries({ queryKey: ['messages', ownerId] });
+    queryClient.invalidateQueries({ queryKey: ['pending-message-count', ownerId] });
   };
 
-  useEffect(() => {
-    loadMessages();
-  }, [ownerId]);
+  const replyMutation = useMutation({
+    mutationFn: (action: string) =>
+      apiClient.replyMessage({
+        voteId: replyTarget!.voteID!,
+        voteParticipantId: ownerId,
+        action,
+        reason: replyReason || undefined,
+      }),
+    onSuccess: () => {
+      setReplyTarget(null);
+      setReplyReason('');
+      invalidateMessages();
+      toast.success(t('messages.replySuccess'));
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+  });
+
+  const handleRefresh = () => invalidateMessages();
+
+  const isPending = (msg: MessageVO) =>
+    PENDING_STATUSES.includes((msg.status || '').toUpperCase());
 
   const statusBadge = (status?: string) => {
     switch (status?.toUpperCase()) {
       case 'PENDING':
       case 'WAITING':
+      case 'REVIEWING':
         return 'warning';
       case 'AGREE':
       case 'APPROVED':
       case 'SUCCEED':
         return 'success';
       case 'REJECT':
+      case 'REJECTED':
       case 'FAILED':
         return 'error';
       default:
         return 'default';
     }
   };
+
+  const loading = messagesQuery.isLoading;
+  const error = messagesQuery.error?.message || pendingCountQuery.error?.message || null;
 
   return (
     <div className="space-y-6">
@@ -62,7 +104,7 @@ export const MessagesPage: React.FC = () => {
           <Badge status={pendingCount > 0 ? 'warning' : 'success'}>
             {t('messages.pendingCount', { count: pendingCount })}
           </Badge>
-          <Button size="sm" variant="outline" onClick={loadMessages}>{t('common.refresh')}</Button>
+          <Button size="sm" variant="outline" onClick={handleRefresh}>{t('common.refresh')}</Button>
         </div>
       </div>
 
@@ -81,19 +123,86 @@ export const MessagesPage: React.FC = () => {
           )}
           {messages.map((msg) => (
             <div key={msg.voteID || msg.messageName} className="p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-gray-850/50">
-              <div>
-                <div className="font-semibold text-gray-900 dark:text-gray-100">{msg.messageName}</div>
+              <div className="min-w-0">
+                <div className="font-semibold text-gray-900 dark:text-gray-100 truncate">{msg.messageName}</div>
                 <div className="text-gray-500 mt-1">
                   {t('messages.type')}: {msg.type} • {t('messages.createTime')}: {msg.createTime}
                 </div>
               </div>
-              <Badge status={statusBadge(msg.status)}>
-                {msg.status || t('messages.statusUnknown')}
-              </Badge>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Badge status={statusBadge(msg.status)}>
+                  {msg.status || t('messages.statusUnknown')}
+                </Badge>
+                <Button size="sm" variant="ghost" onClick={() => setDetailTarget(msg)}>{t('messages.detail')}</Button>
+                {isPending(msg) && (
+                  <Button size="sm" variant="primary" onClick={() => { setReplyReason(''); setReplyTarget(msg); }}>
+                    {t('messages.reply')}
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>
       </Card>
+
+      {/* Reply Modal */}
+      <Modal
+        isOpen={!!replyTarget}
+        onClose={() => setReplyTarget(null)}
+        title={t('messages.replyTitle')}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setReplyTarget(null)}>{t('common.cancel')}</Button>
+            <Button
+              variant="danger"
+              loading={replyMutation.isPending && replyMutation.variables === 'REJECTED'}
+              onClick={() => replyMutation.mutate('REJECTED')}
+            >
+              {t('messages.reject')}
+            </Button>
+            <Button
+              variant="primary"
+              loading={replyMutation.isPending && replyMutation.variables === 'APPROVED'}
+              onClick={() => replyMutation.mutate('APPROVED')}
+            >
+              {t('messages.agree')}
+            </Button>
+          </>
+        }
+      >
+        <div className="text-xs space-y-3">
+          <div className="font-semibold text-gray-800 dark:text-gray-200">{replyTarget?.messageName}</div>
+          <div>
+            <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">{t('messages.reason')}</label>
+            <textarea
+              value={replyReason}
+              onChange={(e) => setReplyReason(e.target.value)}
+              rows={3}
+              className="w-full p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Detail Modal */}
+      <Modal
+        isOpen={!!detailTarget}
+        onClose={() => setDetailTarget(null)}
+        title={t('messages.detail')}
+        footer={<Button variant="primary" onClick={() => setDetailTarget(null)}>{t('common.close')}</Button>}
+      >
+        <div className="text-xs space-y-2">
+          <div><span className="text-gray-500">{t('messages.type')}: </span><span className="font-semibold">{detailTarget?.type}</span></div>
+          <div><span className="text-gray-500">{t('messages.createTime')}: </span><span>{detailTarget?.createTime}</span></div>
+          <div>
+            <span className="text-gray-500">{t('common.statusActive')}: </span>
+            <Badge status={statusBadge(detailQuery.data?.status || detailTarget?.status)}>
+              {detailQuery.data?.status || detailTarget?.status || t('messages.statusUnknown')}
+            </Badge>
+          </div>
+          {detailQuery.isLoading && <div className="text-gray-400">{t('common.loading')}</div>}
+        </div>
+      </Modal>
     </div>
   );
 };

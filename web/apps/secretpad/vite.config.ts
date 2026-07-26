@@ -22,4 +22,29 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // 主包拆分：将体积较大的第三方依赖抽离为独立 chunk，
+    // 利用浏览器长期缓存并消除 >500kB 告警。
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (!id.includes('node_modules')) return undefined;
+          // react 与 @tanstack 存在双向模块引用，合并为同一 framework chunk 以避免循环 chunk 告警。
+          if (
+            id.includes('react-dom') ||
+            id.includes('/react/') ||
+            id.includes('scheduler') ||
+            id.includes('@tanstack')
+          ) {
+            return 'framework';
+          }
+          if (id.includes('/zod/')) {
+            return 'zod-vendor';
+          }
+          // 其余依赖（zustand 等）与 react 存在双向引用，一并归入 framework 避免循环 chunk。
+          return 'framework';
+        },
+      },
+    },
+  },
 });

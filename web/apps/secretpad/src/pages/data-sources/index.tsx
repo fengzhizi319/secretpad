@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Button, Badge, Modal } from '@secretpad/design-system';
-import { apiClient, DataSource, Node, CreateDataSourceInput } from '@secretpad/api-client';
+import { useNavigate } from '@tanstack/react-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Button, Badge, Modal, ConfirmDialog, toast } from '@secretpad/design-system';
+import { apiClient, DataSource, CreateDataSourceInput } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
@@ -9,59 +11,48 @@ const DEFAULT_TYPES = ['local', 'odps', 'mysql', 'postgres'];
 
 export const DataSourcesPage: React.FC = () => {
   const { t } = useTranslation();
-  const [sources, setSources] = useState<DataSource[]>([]);
-  const [nodes, setNodes] = useState<Node[]>([]);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
   const [selectedNodeId, setSelectedNodeId] = useState<string>('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DataSource | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [dsName, setDsName] = useState('');
   const [dsType, setDsType] = useState('local');
   const [dsInfo, setDsInfo] = useState('{}');
-  const [submitting, setSubmitting] = useState(false);
 
+  const nodesQuery = useQuery({
+    queryKey: ['nodes'],
+    queryFn: () => apiClient.getNodes(),
+  });
+  const nodes = nodesQuery.data ?? [];
+
+  // Default the selected node to the first one once nodes load.
   useEffect(() => {
-    apiClient.getNodes()
-      .then((ns) => {
-        setNodes(ns);
-        if (ns.length > 0) {
-          setSelectedNodeId(ns[0].nodeId);
-        }
-      })
-      .catch((e) => setError(e.message));
-  }, []);
+    if (!selectedNodeId && nodes.length > 0) {
+      setSelectedNodeId(nodes[0].nodeId);
+    }
+  }, [nodes, selectedNodeId]);
 
-  const loadSources = () => {
-    if (!selectedNodeId) return;
-    setLoading(true);
-    setError(null);
-    apiClient.getDataSources(selectedNodeId)
-      .then(setSources)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  };
+  const sourcesQuery = useQuery({
+    queryKey: ['datasources', selectedNodeId],
+    queryFn: () => apiClient.getDataSources(selectedNodeId),
+    enabled: !!selectedNodeId,
+  });
+  const sources = sourcesQuery.data ?? [];
 
-  useEffect(() => {
-    loadSources();
-  }, [selectedNodeId]);
+  const invalidateSources = () =>
+    queryClient.invalidateQueries({ queryKey: ['datasources', selectedNodeId] });
 
-  const resetForm = () => {
-    setDsName('');
-    setDsType('local');
-    setDsInfo('{}');
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
+  const createMutation = useMutation({
+    mutationFn: () => {
       let info: Record<string, any> = {};
       try {
         info = JSON.parse(dsInfo);
       } catch {
-        throw new Error(t('dataSources.infoInvalid'));
+        return Promise.reject(new Error(t('dataSources.infoInvalid')));
       }
       const input: CreateDataSourceInput = {
         ownerId: selectedNodeId,
@@ -70,26 +61,54 @@ export const DataSourcesPage: React.FC = () => {
         name: dsName,
         info,
       };
-      await apiClient.createDataSource(input);
+      return apiClient.createDataSource(input);
+    },
+    onSuccess: () => {
       setIsModalOpen(false);
       resetForm();
-      loadSources();
-    } catch (e) {
+      invalidateSources();
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (ds: DataSource) => apiClient.deleteDataSource(selectedNodeId, ds.datasourceId, ds.type),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      invalidateSources();
+      toast.success(t('dataSources.deleteSuccess'));
+    },
+    onError: (e) => {
+      setDeleteTarget(null);
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const resetForm = () => {
+    setDsName('');
+    setDsType('local');
+    setDsInfo('{}');
   };
 
-  const handleDelete = async (ds: DataSource) => {
-    if (!window.confirm(t('dataSources.deleteConfirm'))) return;
-    try {
-      await apiClient.deleteDataSource(selectedNodeId, ds.datasourceId, ds.type);
-      loadSources();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    createMutation.mutate();
   };
+
+  const handleDelete = (ds: DataSource) => {
+    setDeleteTarget(ds);
+  };
+
+  const handleDetail = (ds: DataSource) => {
+    navigate({
+      to: '/data-sources/detail',
+      search: { ownerId: selectedNodeId, datasourceId: ds.datasourceId, type: ds.type },
+    });
+  };
+
+  const loading = sourcesQuery.isLoading;
+  const queryError = sourcesQuery.error?.message || nodesQuery.error?.message || null;
 
   return (
     <div className="space-y-6">
@@ -114,9 +133,9 @@ export const DataSourcesPage: React.FC = () => {
         </div>
       </div>
 
-      {error && (
+      {(error || queryError) && (
         <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg px-4 py-2">
-          {t('common.error', { message: error })}
+          {t('common.error', { message: error || queryError || '' })}
         </div>
       )}
 
@@ -129,6 +148,7 @@ export const DataSourcesPage: React.FC = () => {
               <h3 className="font-bold text-sm text-gray-900 dark:text-gray-100">{ds.name}</h3>
               <div className="flex items-center gap-2">
                 <Badge status="success">{ds.status || 'Available'}</Badge>
+                <Button size="sm" variant="ghost" onClick={() => handleDetail(ds)}>{t('dataSources.detail')}</Button>
                 <AccessGuard access={{ types: [Platform.CENTER] }}>
                   <Button size="sm" variant="danger" onClick={() => handleDelete(ds)}>{t('common.delete')}</Button>
                 </AccessGuard>
@@ -143,7 +163,7 @@ export const DataSourcesPage: React.FC = () => {
         ))}
       </div>
 
-      {sources.length === 0 && !loading && !error && (
+      {sources.length === 0 && !loading && !queryError && (
         <div className="text-center text-xs text-gray-400 py-10">{t('dataSources.noData')}</div>
       )}
 
@@ -154,7 +174,7 @@ export const DataSourcesPage: React.FC = () => {
         footer={
           <>
             <Button variant="ghost" onClick={() => { setIsModalOpen(false); resetForm(); }}>{t('common.cancel')}</Button>
-            <Button variant="primary" onClick={handleCreate} loading={submitting}>{t('common.confirm')}</Button>
+            <Button variant="primary" onClick={handleCreate} loading={createMutation.isPending}>{t('common.confirm')}</Button>
           </>
         }
       >
@@ -192,6 +212,18 @@ export const DataSourcesPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title={t('dataSources.delete')}
+        message={t('dataSources.deleteConfirm')}
+        danger
+        loading={deleteMutation.isPending}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

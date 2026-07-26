@@ -177,3 +177,61 @@ describe('apiClient graph operations', () => {
     expect(defs['read_data/datatable'].name).toBe('read_data');
   });
 });
+
+describe('apiClient nodeRoute / inst / p2p mappings', () => {
+  it('unwraps paginated node routes', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        status: { code: 0 },
+        data: { data: [{ routeId: 'r1', srcNodeId: 'alice', dstNodeId: 'bob' }], totalCount: 1 },
+      },
+      error: undefined,
+      response: new Response(),
+    } as any);
+    const res = await apiClient.listNodeRoutes({ pageNumber: 1, pageSize: 10 });
+    expect(res.totalCount).toBe(1);
+    expect(res.data[0].routeId).toBe('r1');
+  });
+
+  it('maps institution info', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { status: { code: 0 }, data: { instId: 'inst-1', instName: 'Inst One', localNodeId: 'alice' } },
+      error: undefined,
+      response: new Response(),
+    } as any);
+    const inst = await apiClient.getInst('inst-1');
+    expect(inst.instName).toBe('Inst One');
+  });
+
+  it('lists p2p projects', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { status: { code: 0 }, data: [{ projectId: 'p1', projectName: 'P2P Proj', computeMode: 'MPC' }] },
+      error: undefined,
+      response: new Response(),
+    } as any);
+    const projects = await apiClient.listP2pProjects();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].projectName).toBe('P2P Proj');
+  });
+});
+
+describe('Zod runtime validation failure path', () => {
+  it('throws a descriptive error when a required field is missing', async () => {
+    // ProjectVOSchema requires `projectId`; omit it to trigger safeParse failure.
+    mockPost.mockResolvedValueOnce({
+      data: { status: { code: 0 }, data: [{ projectName: 'no-id' }] },
+      error: undefined,
+      response: new Response(),
+    } as any);
+    await expect(apiClient.listP2pProjects()).rejects.toThrow(/API schema validation failed/);
+  });
+
+  it('includes the offending field path in the error message', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { status: { code: 0 }, data: [{ projectName: 'no-id' }] },
+      error: undefined,
+      response: new Response(),
+    } as any);
+    await expect(apiClient.listP2pProjects()).rejects.toThrow(/projectId/);
+  });
+});

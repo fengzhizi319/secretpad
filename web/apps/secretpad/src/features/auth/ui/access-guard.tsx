@@ -16,9 +16,9 @@ export const AccessGuard: React.FC<{ access: AccessType; children: React.ReactNo
 export const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
   const { platformType } = usePlatform();
-  // For this migration phase all P0 pages are available to CENTER/EDGE/AUTONOMY.
-  // P2P-specific pages or center-only management pages can be gated later.
-  const allowedTypes = ['CENTER', 'EDGE', 'AUTONOMY', 'TEST'];
+  // For this migration phase all pages are available to CENTER/EDGE/AUTONOMY/P2P.
+  // Center-only management pages can be gated later via AccessGuard.
+  const allowedTypes = ['CENTER', 'EDGE', 'AUTONOMY', 'TEST', 'P2P'];
   if (allowedTypes.includes(platformType)) {
     return <>{children}</>;
   }

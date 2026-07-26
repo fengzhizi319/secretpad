@@ -70,6 +70,7 @@ export interface DAGCanvasProps {
     refresh?: string;
     nodeOutput?: string;
     deleteNode?: string;
+    emptyCanvas?: string;
   };
   onNodeSelect?: (node: DAGNode | null) => void;
   onNodeMove?: (node: DAGNode) => void | Promise<void>;
@@ -81,22 +82,6 @@ export interface DAGCanvasProps {
   onAddNode?: (component: DAGComponentDef) => DAGNode | Promise<DAGNode>;
   onConnect?: (sourceId: string, targetId: string) => DAGEdge | Promise<DAGEdge> | null | undefined;
 }
-
-const defaultNodes: DAGNode[] = [
-  { id: 'node-1', name: 'Reader (Data Ingest)', category: 'IO', icon: '📥', status: 'Success', x: 60, y: 120 },
-  { id: 'node-2', name: 'PSI (Intersection)', category: 'Privacy', icon: '🔒', status: 'Success', x: 260, y: 120 },
-  { id: 'node-3', name: 'DP Feature Encoder', category: 'Preprocessing', icon: '⚙️', status: 'Success', x: 460, y: 70 },
-  { id: 'node-4', name: 'Secure Aggregator', category: 'Security', icon: '🛡️', status: 'Running', x: 460, y: 180 },
-  { id: 'node-5', name: 'XGBoost Trainer', category: 'ML', icon: '🤖', status: 'Ready', x: 660, y: 120 },
-];
-
-const defaultEdges: DAGEdge[] = [
-  { id: 'e1-2', source: 'node-1', target: 'node-2' },
-  { id: 'e2-3', source: 'node-2', target: 'node-3' },
-  { id: 'e2-4', source: 'node-2', target: 'node-4' },
-  { id: 'e3-5', source: 'node-3', target: 'node-5' },
-  { id: 'e4-5', source: 'node-4', target: 'node-5' },
-];
 
 const NODE_WIDTH = 144; // w-36
 const NODE_HEIGHT = 64; // approximate
@@ -134,8 +119,8 @@ function safeJsonParse(value: string, fallback: Record<string, any> = {}): Recor
 
 export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
   title = 'DAG Pipeline Editor',
-  initialNodes = defaultNodes,
-  initialEdges = defaultEdges,
+  initialNodes = [],
+  initialEdges = [],
   components = [],
   componentGroups,
   i18nMap = {},
@@ -575,6 +560,15 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
 
           {/* Render Nodes */}
           {nodes.map(renderNode)}
+
+          {nodes.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-center text-gray-500 text-xs">
+                <div className="text-3xl mb-2">🗂️</div>
+                <div>{labels.emptyCanvas ?? 'Canvas is empty. Add operators from the library on the left.'}</div>
+              </div>
+            </div>
+          )}
 
           {pendingConnection && (
             <div className="absolute top-2 left-2 px-2 py-1 rounded bg-amber-900/50 text-amber-200 text-[10px] border border-amber-700/50">

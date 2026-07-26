@@ -84,6 +84,7 @@ export const BackendTableColumnSchema = z.object({
   colName: z.string().optional(),
   colType: z.string().optional(),
   colComment: z.string().optional(),
+  classification: z.string().optional(),
 });
 export type BackendTableColumn = z.infer<typeof BackendTableColumnSchema>;
 
@@ -357,3 +358,352 @@ export const CompListVOSchema = z.object({
   comps: z.array(ComponentSummaryDefSchema).optional(),
 });
 export type CompListVO = z.infer<typeof CompListVOSchema>;
+
+// ======================================================================
+// Extended VOs for full migration (project detail / job / p2p / inst /
+// nodeRoute / user / scheduled / data / datasource / approval)
+// ======================================================================
+
+// Party vote info (project approval voting)
+export const PartyVoteInfoSchema = z.object({
+  partyId: z.string().optional(),
+  partyName: z.string().optional(),
+  action: z.string().optional(),
+  reason: z.string().optional(),
+});
+export type PartyVoteInfo = z.infer<typeof PartyVoteInfoSchema>;
+
+export const ProjectInstSchema = z.object({
+  instId: z.string().optional(),
+  instName: z.string().optional(),
+});
+export type ProjectInst = z.infer<typeof ProjectInstSchema>;
+
+export const ProjectDatatableBaseSchema = z.object({
+  datatableId: z.string().optional(),
+  datatableName: z.string().optional(),
+});
+export type ProjectDatatableBase = z.infer<typeof ProjectDatatableBaseSchema>;
+
+export const ProjectNodeVOSchema = z.object({
+  nodeId: z.string().optional(),
+  nodeName: z.string().optional(),
+  nodeType: z.string().optional(),
+  datatables: z.array(ProjectDatatableBaseSchema).optional(),
+});
+export type ProjectNodeVO = z.infer<typeof ProjectNodeVOSchema>;
+
+// Full ProjectVO (from /api/v1alpha1/project/get & p2p/project/list)
+export const ProjectVOSchema = z.object({
+  projectId: z.string(),
+  projectName: z.string().optional(),
+  description: z.string().optional(),
+  nodes: z.array(ProjectNodeVOSchema).optional(),
+  insts: z.array(ProjectInstSchema).optional(),
+  graphCount: z.number().optional(),
+  jobCount: z.number().optional(),
+  gmtCreate: z.string().optional(),
+  computeMode: z.string().optional(),
+  teeNodeId: z.string().optional(),
+  status: z.string().optional(),
+  initiator: z.string().optional(),
+  initiatorName: z.string().optional(),
+  computeFunc: z.string().optional(),
+  voteId: z.string().optional(),
+  partyVoteInfos: z.array(PartyVoteInfoSchema).optional(),
+});
+export type ProjectVO = z.infer<typeof ProjectVOSchema>;
+
+// Project job VO (from /api/v1alpha1/project/job/get & scheduled/info)
+export const ProjectJobVOSchema = z.object({
+  jobId: z.string().optional(),
+  status: z.string().optional(),
+  errMsg: z.string().optional(),
+  gmtCreate: z.string().optional(),
+  gmtModified: z.string().optional(),
+  gmtFinished: z.string().optional(),
+  finished: z.boolean().optional(),
+  graph: GraphDetailVOSchema.optional(),
+});
+export type ProjectJobVO = z.infer<typeof ProjectJobVOSchema>;
+
+// Message detail VO (from /api/v1alpha1/message/detail)
+export const MessageDetailVOSchema = z.object({
+  messageName: z.string().optional(),
+  type: z.string().optional(),
+  status: z.string().optional(),
+});
+export type MessageDetailVO = z.infer<typeof MessageDetailVOSchema>;
+
+// Model export package response (from /api/v1alpha1/model/pack)
+export const ModelExportPackageResponseSchema = z.object({
+  modelId: z.string().optional(),
+  jobId: z.string().optional(),
+});
+export type ModelExportPackageResponse = z.infer<typeof ModelExportPackageResponseSchema>;
+
+// Model party path response (from /api/v1alpha1/model/modelPartyPath)
+export const ModelPartyPathResponseSchema = z.object({
+  nodeId: z.string().optional(),
+  nodeName: z.string().optional(),
+  dataSources: z.array(z.record(z.any())).optional(),
+});
+export type ModelPartyPathResponse = z.infer<typeof ModelPartyPathResponseSchema>;
+
+// Model pack detail VO (from /api/v1alpha1/model/detail)
+export const ModelPartyColumnsSchema = z.object({
+  nodeId: z.string().optional(),
+  nodeName: z.string().optional(),
+  columns: z.array(z.string()).optional(),
+});
+export const ModelPackDetailVOSchema = z.object({
+  parties: z.array(ModelPartyColumnsSchema).optional(),
+});
+export type ModelPackDetailVO = z.infer<typeof ModelPackDetailVOSchema>;
+
+// Node instance / datatable sub-VOs
+export const NodeInstanceDTOSchema = z.object({
+  name: z.string().optional(),
+  status: z.string().optional(),
+  version: z.string().optional(),
+  lastHeartbeatTime: z.string().optional(),
+  lastTransitionTime: z.string().optional(),
+});
+export type NodeInstanceDTO = z.infer<typeof NodeInstanceDTOSchema>;
+
+export const NodeDatatableVOSchema = z.object({
+  datatableId: z.string().optional(),
+  datatableName: z.string().optional(),
+});
+export type NodeDatatableVO = z.infer<typeof NodeDatatableVOSchema>;
+
+// Node route VO (from /api/v1alpha1/nodeRoute/*)
+export const NodeRouterVOSchema = z.object({
+  routeId: z.string().optional(),
+  srcNodeId: z.string().optional(),
+  dstNodeId: z.string().optional(),
+  srcNode: z.record(z.any()).optional(),
+  dstNode: z.record(z.any()).optional(),
+  srcNetAddress: z.string().optional(),
+  dstNetAddress: z.string().optional(),
+  status: z.string().optional(),
+  gmtCreate: z.string().optional(),
+  gmtModified: z.string().optional(),
+  isProjectJobRunning: z.boolean().optional(),
+  routeType: z.string().optional(),
+});
+export type NodeRouterVO = z.infer<typeof NodeRouterVOSchema>;
+
+// Node results VO (from /api/v1alpha1/node/result/*)
+export const NodeResultsVOSchema = z.object({
+  domainDataId: z.string().optional(),
+  datasourceId: z.string().optional(),
+  datasourceType: z.string().optional(),
+  productName: z.string().optional(),
+  datatableType: z.string().optional(),
+  sourceProjectId: z.string().optional(),
+  sourceProjectName: z.string().optional(),
+  relativeUri: z.string().optional(),
+  jobId: z.string().optional(),
+  trainFlow: z.string().optional(),
+  pullFromTeeStatus: z.string().optional(),
+  pullFromTeeErrMsg: z.string().optional(),
+  gmtCreate: z.string().optional(),
+  computeMode: z.string().optional(),
+});
+export type NodeResultsVO = z.infer<typeof NodeResultsVOSchema>;
+
+export const NodeAllResultsVOSchema = z.object({
+  nodeResultsVO: NodeResultsVOSchema.optional(),
+  nodeId: z.string().optional(),
+  nodeName: z.string().optional(),
+});
+export type NodeAllResultsVO = z.infer<typeof NodeAllResultsVOSchema>;
+
+export const AllNodeResultsListVOSchema = z.object({
+  nodeAllResultsVOList: z.array(NodeAllResultsVOSchema).optional(),
+  totalNodeResultNums: z.number().optional(),
+});
+export type AllNodeResultsListVO = z.infer<typeof AllNodeResultsListVOSchema>;
+
+export const NodeResultDetailVOSchema = z.object({
+  nodeResultsVO: NodeResultsVOSchema.optional(),
+  graphDetailVO: GraphDetailVOSchema.optional(),
+  tableColumnVOList: z.array(BackendTableColumnSchema).optional(),
+  output: GraphNodeOutputVOSchema.optional(),
+  datasource: z.string().optional(),
+});
+export type NodeResultDetailVO = z.infer<typeof NodeResultDetailVOSchema>;
+
+// Institution VOs (from /api/v1alpha1/inst/*)
+export const InstVOSchema = z.object({
+  instId: z.string().optional(),
+  instName: z.string().optional(),
+  localNodeId: z.string().optional(),
+});
+export type InstVO = z.infer<typeof InstVOSchema>;
+
+export const InstTokenVOSchema = z.object({
+  nodeId: z.string().optional(),
+  nodeName: z.string().optional(),
+  instToken: z.string().optional(),
+  createTime: z.string().optional(),
+  instTokenState: z.string().optional(),
+});
+export type InstTokenVO = z.infer<typeof InstTokenVOSchema>;
+
+// P2P participants VOs (from /api/v1alpha1/p2p/project/participants)
+export const NodeInstVOSchema = z.object({
+  inviteeId: z.string().optional(),
+  inviteeName: z.string().optional(),
+  instId: z.string().optional(),
+  instName: z.string().optional(),
+});
+export type NodeInstVO = z.infer<typeof NodeInstVOSchema>;
+
+export const PartyVoteStatusSchema = z.object({
+  participantID: z.string().optional(),
+  participantName: z.string().optional(),
+  action: z.string().optional(),
+  reason: z.string().optional(),
+});
+export type PartyVoteStatus = z.infer<typeof PartyVoteStatusSchema>;
+
+export const ProjectParticipantsDetailVOSchema = z.object({
+  initiatorId: z.string().optional(),
+  initiatorName: z.string().optional(),
+  projectName: z.string().optional(),
+  partyVoteStatuses: z.array(PartyVoteStatusSchema).optional(),
+  computeMode: z.string().optional(),
+  computeFunc: z.string().optional(),
+  projectDesc: z.string().optional(),
+  initiatorNodeId: z.string().optional(),
+  initiatorNodeName: z.string().optional(),
+  invitees: z.array(NodeInstVOSchema).optional(),
+});
+export type ProjectParticipantsDetailVO = z.infer<typeof ProjectParticipantsDetailVOSchema>;
+
+// User context DTO (from /api/v1alpha1/user/get)
+export const UserContextDTOSchema = z.object({
+  token: z.string().optional(),
+  name: z.string().optional(),
+  platformType: z.string().optional(),
+  platformNodeId: z.string().optional(),
+  ownerType: z.string().optional(),
+  ownerId: z.string().optional(),
+  projectIds: z.array(z.string()).optional(),
+  apiResources: z.array(z.string()).optional(),
+  virtualUserForNode: z.boolean().optional(),
+  deployMode: z.string().optional(),
+});
+export type UserContextDTO = z.infer<typeof UserContextDTOSchema>;
+
+// Scheduled task page VO (from /api/v1alpha1/scheduled/task/page)
+export const TaskPageScheduledVOSchema = z.object({
+  scheduleTaskId: z.string().optional(),
+  scheduleTaskExpectStartTime: z.string().optional(),
+  scheduleTaskStartTime: z.string().optional(),
+  scheduleTaskEndTime: z.string().optional(),
+  scheduleTaskStatus: z.string().optional(),
+  allReRun: z.boolean().optional(),
+});
+export type TaskPageScheduledVO = z.infer<typeof TaskPageScheduledVOSchema>;
+
+// Cron config (for scheduled graph create)
+export const CronSchema = z.object({
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  scheduleCycle: z.string().optional(),
+  scheduleDate: z.string().optional(),
+  scheduleTime: z.string().optional(),
+});
+export type Cron = z.infer<typeof CronSchema>;
+
+// Datatable VO (raw backend shape, from /api/v1alpha1/datatable/get)
+export const TableColumnVOSchema = BackendTableColumnSchema;
+export type TableColumnVO = z.infer<typeof TableColumnVOSchema>;
+
+export const AuthProjectVOSchema = z.object({
+  projectId: z.string().optional(),
+  name: z.string().optional(),
+  computeMode: z.string().optional(),
+  gmtCreate: z.string().optional(),
+});
+export type AuthProjectVO = z.infer<typeof AuthProjectVOSchema>;
+
+export const DatatableVOSchema = z.object({
+  datatableId: z.string().optional(),
+  datatableName: z.string().optional(),
+  status: z.string().optional(),
+  pushToTeeStatus: z.string().optional(),
+  pushToTeeErrMsg: z.string().optional(),
+  datasourceId: z.string().optional(),
+  datasourceType: z.string().optional(),
+  datasourceName: z.string().optional(),
+  nodeId: z.string().optional(),
+  relativeUri: z.string().optional(),
+  type: z.string().optional(),
+  description: z.string().optional(),
+  schema: z.array(TableColumnVOSchema).optional(),
+  authProjects: z.array(AuthProjectVOSchema).optional(),
+  nullStrs: z.array(z.string()).optional(),
+});
+export type DatatableVO = z.infer<typeof DatatableVOSchema>;
+
+export const DatatableNodeVOSchema = z.object({
+  datatableVO: DatatableVOSchema.optional(),
+  nodeName: z.string().optional(),
+  nodeId: z.string().optional(),
+});
+export type DatatableNodeVO = z.infer<typeof DatatableNodeVOSchema>;
+
+// Datasource detail VOs (from /api/v1alpha1/datasource/detail & nodes)
+export const DataSourceRelatedNodeSchema = z.object({
+  nodeId: z.string().optional(),
+  nodeName: z.string().optional(),
+  status: z.string().optional(),
+});
+export type DataSourceRelatedNode = z.infer<typeof DataSourceRelatedNodeSchema>;
+
+export const DatasourceDetailAggregateVOSchema = z.object({
+  nodes: z.array(DataSourceRelatedNodeSchema).optional(),
+  datasourceId: z.string().optional(),
+  name: z.string().optional(),
+  type: z.string().optional(),
+  status: z.string().optional(),
+  info: z.record(z.any()).optional(),
+});
+export type DatasourceDetailAggregateVO = z.infer<typeof DatasourceDetailAggregateVOSchema>;
+
+export const DatasourceNodesVOSchema = z.object({
+  nodes: z.array(DataSourceRelatedNodeSchema).optional(),
+});
+export type DatasourceNodesVO = z.infer<typeof DatasourceNodesVOSchema>;
+
+// Upload data result VO (from /api/v1alpha1/data/upload)
+export const UploadDataResultVOSchema = z.object({
+  name: z.string().optional(),
+  realName: z.string().optional(),
+  datasource: z.string().optional(),
+  datasourceType: z.string().optional(),
+});
+export type UploadDataResultVO = z.infer<typeof UploadDataResultVOSchema>;
+
+// Sync data DTO (from /api/v1alpha1/data/sync)
+export const SyncDataDTOSchema = z.object({
+  tableName: z.string().optional(),
+  lastUpdateTime: z.string().optional(),
+  action: z.string().optional(),
+  data: z.record(z.any()).optional(),
+});
+export type SyncDataDTO = z.infer<typeof SyncDataDTOSchema>;
+
+// Generic page response wrapper (SecretPadPageResponse<T>)
+export const pageResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
+  z.object({
+    data: z.array(itemSchema).optional(),
+    pageNumber: z.number().optional(),
+    pageSize: z.number().optional(),
+    totalCount: z.number().optional(),
+    totalPage: z.number().optional(),
+  });

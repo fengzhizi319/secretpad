@@ -1,29 +1,47 @@
 import React from 'react';
+import { Link, useRouterState } from '@tanstack/react-router';
 import { useTranslation } from '../shared/lib/i18n';
+import { usePlatform } from '../shared/lib/platform';
 
-export interface AppSidebarProps {
-  currentPath: string;
-  onNavigate: (path: string) => void;
-}
-
-export const AppSidebar: React.FC<AppSidebarProps> = ({ currentPath, onNavigate }) => {
+export const AppSidebar: React.FC = () => {
   const { t } = useTranslation();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { isP2p } = usePlatform();
 
-  const menuItems = [
-    { section: t('sidebar.overview') },
-    { path: '/dashboard', label: t('sidebar.dashboard'), icon: '📊' },
-    { section: t('sidebar.collaboration') },
-    { path: '/projects', label: t('sidebar.projects'), icon: '📁' },
-    { path: '/dag', label: t('sidebar.dag'), icon: '⚡' },
-    { section: t('sidebar.resources') },
-    { path: '/nodes', label: t('sidebar.nodes'), icon: '🖥️' },
-    { path: '/data-tables', label: t('sidebar.dataTables'), icon: '🗄️' },
-    { path: '/data-sources', label: t('sidebar.dataSources'), icon: '🔌' },
-    { section: t('sidebar.governance') },
-    { path: '/models', label: t('sidebar.models'), icon: '🤖' },
-    { path: '/periodic-tasks', label: t('sidebar.periodicTasks'), icon: '⏰' },
-    { path: '/messages', label: t('sidebar.messages'), icon: '🔔' },
-  ];
+  const menuItems = isP2p
+    ? [
+        { section: t('sidebar.overview') },
+        { path: '/dashboard', label: t('sidebar.dashboard'), icon: '📊' },
+        { section: t('sidebar.p2p') },
+        { path: '/p2p/projects', label: t('sidebar.p2pProjects'), icon: '📁' },
+        { path: '/p2p/my-node', label: t('sidebar.p2pMyNode'), icon: '🖥️' },
+        { section: t('sidebar.resources') },
+        { path: '/nodes', label: t('sidebar.nodes'), icon: '🖥️' },
+        { path: '/data-tables', label: t('sidebar.dataTables'), icon: '🗄️' },
+        { path: '/data-sources', label: t('sidebar.dataSources'), icon: '🔌' },
+        { section: t('sidebar.governance') },
+        { path: '/models', label: t('sidebar.models'), icon: '🤖' },
+        { path: '/messages', label: t('sidebar.messages'), icon: '🔔' },
+        { path: '/account', label: t('sidebar.account'), icon: '👤' },
+      ]
+    : [
+        { section: t('sidebar.overview') },
+        { path: '/dashboard', label: t('sidebar.dashboard'), icon: '📊' },
+        { section: t('sidebar.collaboration') },
+        { path: '/projects', label: t('sidebar.projects'), icon: '📁' },
+        { path: '/dag', label: t('sidebar.dag'), icon: '⚡' },
+        { section: t('sidebar.resources') },
+        { path: '/nodes', label: t('sidebar.nodes'), icon: '🖥️' },
+        { path: '/data-tables', label: t('sidebar.dataTables'), icon: '🗄️' },
+        { path: '/data-sources', label: t('sidebar.dataSources'), icon: '🔌' },
+        { path: '/node-routes', label: t('sidebar.nodeRoutes'), icon: '🔗' },
+        { path: '/institutions', label: t('sidebar.institutions'), icon: '🏢' },
+        { section: t('sidebar.governance') },
+        { path: '/models', label: t('sidebar.models'), icon: '🤖' },
+        { path: '/periodic-tasks', label: t('sidebar.periodicTasks'), icon: '⏰' },
+        { path: '/messages', label: t('sidebar.messages'), icon: '🔔' },
+        { path: '/account', label: t('sidebar.account'), icon: '👤' },
+      ];
 
   return (
     <aside className="w-56 bg-gray-900 text-gray-300 flex flex-col flex-shrink-0 border-r border-gray-800 select-none">
@@ -49,11 +67,11 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ currentPath, onNavigate 
             );
           }
 
-          const isActive = currentPath === item.path || (item.path !== '/dashboard' && currentPath.startsWith(item.path!));
+          const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname.startsWith(item.path!));
           return (
-            <button
+            <Link
               key={item.path}
-              onClick={() => onNavigate(item.path!)}
+              to={item.path}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-sm font-semibold'
@@ -64,7 +82,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ currentPath, onNavigate 
                 <span className="text-sm">{item.icon}</span>
                 <span>{item.label}</span>
               </div>
-            </button>
+            </Link>
           );
         })}
       </nav>

@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { components } from './generated/secretpad';
+import { z } from 'zod';
 import {
   Node,
   Project,
@@ -27,6 +28,54 @@ import {
   GraphNodeOutputVO,
   CompListVO,
   ComponentDef,
+  ProjectVO,
+  ProjectVOSchema,
+  ProjectJobVO,
+  ProjectJobVOSchema,
+  MessageDetailVO,
+  MessageDetailVOSchema,
+  ModelExportPackageResponse,
+  ModelExportPackageResponseSchema,
+  ModelPartyPathResponse,
+  ModelPartyPathResponseSchema,
+  ModelPackDetailVO,
+  ModelPackDetailVOSchema,
+  NodeRouterVO,
+  NodeRouterVOSchema,
+  NodeResultsVO,
+  AllNodeResultsListVO,
+  AllNodeResultsListVOSchema,
+  NodeResultDetailVO,
+  NodeResultDetailVOSchema,
+  InstVO,
+  InstVOSchema,
+  InstTokenVO,
+  InstTokenVOSchema,
+  ProjectParticipantsDetailVO,
+  ProjectParticipantsDetailVOSchema,
+  UserContextDTO,
+  UserContextDTOSchema,
+  TaskPageScheduledVO,
+  DatatableNodeVO,
+  DatatableNodeVOSchema,
+  DatasourceDetailAggregateVO,
+  DatasourceDetailAggregateVOSchema,
+  DatasourceNodesVO,
+  DatasourceNodesVOSchema,
+  UploadDataResultVO,
+  UploadDataResultVOSchema,
+  SyncDataDTO,
+  SyncDataDTOSchema,
+  NodeSchema,
+  ProjectSchema,
+  MessageVOSchema,
+  PageScheduledVOSchema,
+  GraphMetaVOSchema,
+  GraphDetailVOSchema,
+  GraphStatusSchema,
+  CompListVOSchema,
+  ModelPackVOSchema,
+  pageResponseSchema,
 } from './schemas';
 
 type SecretPadResponse<T> = {
@@ -54,13 +103,71 @@ function apiError(error: unknown): string {
   return String((error as any)?.message || error || 'Unknown error');
 }
 
+/**
+ * Runtime-validate an API payload against a Zod schema.
+ * Replaces bare `as unknown as` casts with real `safeParse` checks and throws
+ * a descriptive error (including offending field paths) on contract violation.
+ */
+export function validated<S extends z.ZodTypeAny>(schema: S, data: unknown, context?: string): z.output<S> {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    const issues = result.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('; ');
+    throw new Error(`API schema validation failed${context ? ` [${context}]` : ''}: ${issues}`);
+  }
+  return result.data;
+}
+
+/** Unwrap a SecretPadResponse and runtime-validate its `data` payload. */
+function unwrapValidated<S extends z.ZodTypeAny>(schema: S, res: unknown, context?: string): z.output<S> {
+  return validated(schema, unwrap(res as SecretPadResponse<unknown>), context);
+}
+
+/** Read the stored auth token (shared with raw `fetch` for multipart uploads). */
+function getStoredToken(): string | null {
+  return typeof localStorage !== 'undefined' ? localStorage.getItem('secretpad-token') : null;
+}
+
+/** POST a multipart/form-data body via raw fetch (openapi-fetch is JSON-only). */
+async function postMultipart<T>(url: string, formData: FormData, schema: z.ZodType<T>, context?: string): Promise<T> {
+  const headers: Record<string, string> = { 'Trace-Id': `${Date.now().toString(36)}-up` };
+  const token = getStoredToken();
+  if (token) headers['User-Token'] = token;
+  const response = await fetch(url, { method: 'POST', headers, body: formData });
+  if (!response.ok) throw new Error(`Upload failed with HTTP ${response.status}`);
+  const json = (await response.json()) as SecretPadResponse<unknown>;
+  return unwrapValidated(schema, json, context);
+}
+
 function mapBackendColumn(col: BackendTableColumn): DataTableColumn {
   return {
     name: col.colName || '',
     type: col.colType || '',
     comment: col.colComment,
-    classification: 'L1',
+    classification: col.classification,
   };
+}
+
+/** Map a backend ProjectVO into the normalized frontend Project shape. */
+function mapProjectVO(vo: ProjectVO): Project {
+  return {
+    projectId: vo.projectId,
+    projectName: vo.projectName || '',
+    name: vo.projectName || '',
+    description: vo.description || '',
+    computeMode: vo.computeMode || 'FL',
+    nodes: (vo.nodes || []).map((n) => ({
+      nodeId: n.nodeId || '',
+      nodeName: n.nodeName,
+      nodeType: n.nodeType,
+    })),
+    status: vo.status || 'ACTIVE',
+    jobCount: vo.jobCount ?? 0,
+    gmtCreate: vo.gmtCreate || '',
+    createTime: vo.gmtCreate || '',
+  } as Project;
 }
 
 function mapJobStatus(status: string): JobExecution['status'] {
@@ -177,8 +284,12 @@ export const apiClient = {
   },
 
   async getProjectDetail(id: string): Promise<Project | undefined> {
-    const projects = await this.getProjects();
-    return projects.find((p) => p.projectId === id);
+    const { data, error } = await api.POST('/api/v1alpha1/project/get', {
+      body: { projectId: id } as components['schemas']['GetProjectRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const vo = unwrapValidated(ProjectVOSchema, data, 'project/get');
+    return mapProjectVO(vo);
   },
 
   async createProject(data: Partial<Project>): Promise<Project> {
@@ -352,16 +463,14 @@ export const apiClient = {
 
   async getJobs(limit = 10): Promise<JobExecution[]> {
     const projects = await this.getProjects();
-    const jobs: JobExecution[] = [];
-    for (const project of projects.slice(0, 5)) {
-      try {
-        const list = await this.getProjectJobs(project.projectId, 10, 1);
-        jobs.push(...list);
-      } catch {
-        // ignore per-project failures
-      }
-    }
-    return jobs
+    // Fetch per-project jobs concurrently (bounded) instead of a serial N+1 loop.
+    const results = await Promise.all(
+      projects.slice(0, 5).map((project) =>
+        this.getProjectJobs(project.projectId, 10, 1).catch(() => [] as JobExecution[])
+      )
+    );
+    return results
+      .flat()
       .sort((a, b) => new Date(b.createTime || 0).getTime() - new Date(a.createTime || 0).getTime())
       .slice(0, limit);
   },
@@ -576,5 +685,639 @@ export const apiClient = {
     });
     if (error) throw new Error(apiError(error));
     return unwrap(data as unknown as SecretPadResponse<GraphNodeOutputVO>);
+  },
+
+  // ============================ project ============================
+
+  async updateProject(input: { projectId: string; name?: string; description?: string }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/update', {
+      body: input as components['schemas']['UpdateProjectRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async deleteProject(projectId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/delete', {
+      body: { projectId } as components['schemas']['GetProjectRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async addProjectNode(projectId: string, nodeId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/node/add', {
+      body: { projectId, nodeId } as components['schemas']['AddNodeToProjectRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async addProjectDatatable(input: {
+    projectId: string;
+    nodeId: string;
+    datatableId: string;
+    configs?: { colName?: string; colType?: string; classification?: string }[];
+    teeNodeId?: string;
+    datasourceId?: string;
+    type?: string;
+  }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/datatable/add', {
+      body: input as components['schemas']['AddProjectDatatableRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async deleteProjectDatatable(input: { projectId: string; nodeId: string; datatableId: string }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/datatable/delete', {
+      body: input as components['schemas']['DeleteProjectDatatableRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getProjectDatatable(input: {
+    projectId: string;
+    nodeId: string;
+    datatableId: string;
+    type?: string;
+  }): Promise<DatatableNodeVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/datatable/get', {
+      body: input as components['schemas']['GetProjectDatatableRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(DatatableNodeVOSchema, data, 'project/datatable/get');
+  },
+
+  async getProjectJob(projectId: string, jobId: string): Promise<ProjectJobVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/job/get', {
+      body: { projectId, jobId } as components['schemas']['GetProjectJobRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(ProjectJobVOSchema, data, 'project/job/get');
+  },
+
+  async stopProjectJob(projectId: string, jobId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/project/job/stop', {
+      body: { projectId, jobId } as components['schemas']['StopProjectJobTaskRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  // ============================ graph ============================
+
+  async stopGraph(projectId: string, graphId: string, graphNodeId?: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/stop', {
+      body: { projectId, graphId, graphNodeId } as components['schemas']['StopGraphNodeRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async renameGraph(projectId: string, graphId: string, name: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/graph/meta/update', {
+      body: { projectId, graphId, name } as components['schemas']['UpdateGraphMetaRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  // ============================ message ============================
+
+  async getMessageDetail(input: {
+    ownerId: string;
+    voteId: string;
+    isInitiator: boolean;
+    voteType: string;
+    projectId?: string;
+  }): Promise<MessageDetailVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/message/detail', {
+      body: input as components['schemas']['MessageDetailRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(MessageDetailVOSchema, data, 'message/detail');
+  },
+
+  async replyMessage(input: { voteId: string; voteParticipantId: string; action: string; reason?: string }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/message/reply', {
+      body: input as components['schemas']['VoteReplyRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  // ============================ model ============================
+
+  async packModel(input: {
+    projectId: string;
+    graphId: string;
+    trainId: string;
+    modelName: string;
+    modelDesc?: string;
+    graphNodeOutPutId: string;
+    modelPartyConfig: unknown[];
+    modelComponent: unknown[];
+  }): Promise<ModelExportPackageResponse> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/pack', {
+      body: input as components['schemas']['ModelExportPackageRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(ModelExportPackageResponseSchema, data, 'model/pack');
+  },
+
+  async discardModel(modelId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/discard', {
+      body: { modelId } as components['schemas']['DiscardModelPackRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getModelStatus(jobId: string, projectId: string): Promise<string> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/status', {
+      body: { jobId, projectId } as components['schemas']['ModelExportStatusRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(data as unknown as SecretPadResponse<unknown>);
+    return typeof payload === 'string' ? payload : (payload as { modelStats?: string })?.modelStats || '';
+  },
+
+  async getModelDetail(modelId: string, projectId: string): Promise<ModelPackDetailVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/detail', {
+      body: { modelId, projectId } as components['schemas']['QueryModelDetailRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(ModelPackDetailVOSchema, data, 'model/detail');
+  },
+
+  async getModelPartyPath(input: {
+    projectId: string;
+    graphNodeId: string;
+    graphNodeOutPutId: string;
+  }): Promise<ModelPartyPathResponse[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/model/modelPartyPath', {
+      body: input as components['schemas']['ModelPartyPathRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return validated(z.array(ModelPartyPathResponseSchema), unwrap(data as unknown as SecretPadResponse<unknown>), 'model/modelPartyPath');
+  },
+
+  // ============================ data ============================
+
+  async createData(input: {
+    nodeId: string;
+    name: string;
+    tableName: string;
+    datasourceType: string;
+    datasourceName: string;
+    realName?: string;
+    description?: string;
+    datatableSchema?: { colName?: string; colType?: string; colComment?: string }[];
+    nullStrs?: string[];
+  }): Promise<string> {
+    const { data, error } = await api.POST('/api/v1alpha1/data/create', {
+      body: input as components['schemas']['CreateDataRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<string>);
+  },
+
+  async downloadData(input: { nodeId: string; domainDataId: string }): Promise<Blob> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = getStoredToken();
+    if (token) headers['User-Token'] = token;
+    const response = await fetch('/api/v1alpha1/data/download', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) throw new Error(`Download failed with HTTP ${response.status}`);
+    return response.blob();
+  },
+
+  async uploadData(nodeId: string, file: File): Promise<UploadDataResultVO> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return postMultipart(
+      `/api/v1alpha1/data/upload?Node-Id=${encodeURIComponent(nodeId)}`,
+      formData,
+      UploadDataResultVOSchema,
+      'data/upload'
+    );
+  },
+
+  async syncData(domainDataId: string, kusciaOriginSource = ''): Promise<SyncDataDTO> {
+    const { data, error } = await api.POST('/api/v1alpha1/data/sync', {
+      params: { header: { 'kuscia-origin-source': kusciaOriginSource } },
+      body: domainDataId,
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(SyncDataDTOSchema, data, 'data/sync');
+  },
+
+  // ============================ node ============================
+
+  async getNode(nodeId: string): Promise<Node> {
+    const { data, error } = await api.POST('/api/v1alpha1/node/get', {
+      body: { nodeId } as components['schemas']['NodeIdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const node = unwrapValidated(NodeSchema, data, 'node/get');
+    return { ...node, name: node.nodeName, status: node.nodeStatus, createTime: node.gmtCreate };
+  },
+
+  async newNodeToken(nodeId: string): Promise<{ token?: string; tokenStatus?: string; lastTransitionTime?: string }> {
+    const { data, error } = await api.POST('/api/v1alpha1/node/newToken', {
+      body: { nodeId } as components['schemas']['NodeTokenRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<{ token?: string; tokenStatus?: string; lastTransitionTime?: string }>);
+  },
+
+  async listNodeResults(input: {
+    ownerId?: string;
+    pageSize?: number;
+    pageNumber?: number;
+    nodeNamesFilter?: string[];
+    kindFilters?: string[];
+    nameFilter?: string;
+    timeSortingRule?: string;
+    teeNodeId?: string;
+  }): Promise<AllNodeResultsListVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/node/result/list', {
+      body: input as components['schemas']['ListNodeResultRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(AllNodeResultsListVOSchema, data, 'node/result/list');
+  },
+
+  async getNodeResultDetail(input: {
+    nodeId: string;
+    domainDataId: string;
+    dataType?: string;
+    dataVendor?: string;
+  }): Promise<NodeResultDetailVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/node/result/detail', {
+      body: input as components['schemas']['GetNodeResultDetailRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(NodeResultDetailVOSchema, data, 'node/result/detail');
+  },
+
+  // ============================ nodeRoute ============================
+
+  async listNodeRoutes(input: {
+    pageNumber?: number;
+    pageSize?: number;
+    dstNodeId?: string;
+    srcNodeId?: string;
+    routeType?: string;
+  } = {}): Promise<{ data: NodeRouterVO[]; totalCount: number }> {
+    const { data, error } = await api.POST('/api/v1alpha1/nodeRoute/page', {
+      body: input as components['schemas']['PageNodeRouteRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const page = unwrapValidated(pageResponseSchema(NodeRouterVOSchema), data, 'nodeRoute/page');
+    return { data: page.data || [], totalCount: page.totalCount || 0 };
+  },
+
+  async listRouteNodes(): Promise<Node[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/nodeRoute/listNode', { body: {} as any });
+    if (error) throw new Error(apiError(error));
+    return validated(z.array(NodeSchema), unwrap(data as unknown as SecretPadResponse<unknown>), 'nodeRoute/listNode').map((n) => ({
+      ...n,
+      name: n.nodeName,
+      status: n.nodeStatus,
+      createTime: n.gmtCreate,
+    }));
+  },
+
+  async getNodeRoute(routerId: string): Promise<NodeRouterVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/nodeRoute/get', {
+      body: { routerId } as components['schemas']['RouterIdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(NodeRouterVOSchema, data, 'nodeRoute/get');
+  },
+
+  async updateNodeRoute(input: { routerId: string; srcNetAddress?: string; dstNetAddress?: string }): Promise<string> {
+    const { data, error } = await api.POST('/api/v1alpha1/nodeRoute/update', {
+      body: input as components['schemas']['UpdateNodeRouterRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<string>);
+  },
+
+  async deleteNodeRoute(routerId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/nodeRoute/delete', {
+      body: { routerId } as components['schemas']['RouterIdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async refreshNodeRoute(routerId: string): Promise<NodeRouterVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/nodeRoute/refresh', {
+      body: { routerId } as components['schemas']['RouterIdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(NodeRouterVOSchema, data, 'nodeRoute/refresh');
+  },
+
+  // ============================ inst (institution) ============================
+
+  async getInst(instId: string): Promise<InstVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/inst/get', {
+      body: { instId } as components['schemas']['InstRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(InstVOSchema, data, 'inst/get');
+  },
+
+  async listInstNodes(): Promise<Node[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/inst/node/list', { body: {} as any });
+    if (error) throw new Error(apiError(error));
+    return validated(z.array(NodeSchema), unwrap(data as unknown as SecretPadResponse<unknown>), 'inst/node/list').map((n) => ({
+      ...n,
+      name: n.nodeName,
+      status: n.nodeStatus,
+      createTime: n.gmtCreate,
+    }));
+  },
+
+  async addInstNode(input: { name: string; mode?: number; netAddress?: string; description?: string }): Promise<InstTokenVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/inst/node/add', {
+      body: input as components['schemas']['CreateNodeRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(InstTokenVOSchema, data, 'inst/node/add');
+  },
+
+  async deleteInstNode(nodeId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/inst/node/delete', {
+      body: { nodeId } as components['schemas']['NodeIdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getInstNodeToken(nodeId: string): Promise<InstTokenVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/inst/node/token', {
+      body: { nodeId } as components['schemas']['NodeTokenRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(InstTokenVOSchema, data, 'inst/node/token');
+  },
+
+  async newInstNodeToken(nodeId: string): Promise<InstTokenVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/inst/node/newToken', {
+      body: { nodeId } as components['schemas']['NodeTokenRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(InstTokenVOSchema, data, 'inst/node/newToken');
+  },
+
+  async registerInstNode(jsonData: string, files: { certFile?: File; keyFile?: File; token?: File }): Promise<void> {
+    const formData = new FormData();
+    if (files.certFile) formData.append('certFile', files.certFile);
+    if (files.keyFile) formData.append('keyFile', files.keyFile);
+    if (files.token) formData.append('token', files.token);
+    const headers: Record<string, string> = {};
+    const token = getStoredToken();
+    if (token) headers['User-Token'] = token;
+    const response = await fetch(`/api/v1alpha1/inst/node/register?json_data=${encodeURIComponent(jsonData)}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) throw new Error(`Register node failed with HTTP ${response.status}`);
+    const json = (await response.json()) as SecretPadResponse<unknown>;
+    unwrapVoid(json);
+  },
+
+  // ============================ p2p ============================
+
+  async createP2pNode(input: {
+    name?: string;
+    mode: number;
+    masterNodeId?: string;
+    certText: string;
+    dstNodeId: string;
+    srcNetAddress?: string;
+    srcNodeId: string;
+    dstNetAddress: string;
+    dstInstId?: string;
+    dstInstName?: string;
+  }): Promise<string> {
+    const { data, error } = await api.POST('/api/v1alpha1/p2p/node/create', {
+      body: input as components['schemas']['P2pCreateNodeRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<string>);
+  },
+
+  async deleteP2pNode(routerId: string): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/p2p/node/delete', {
+      body: { routerId } as components['schemas']['RouterIdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async createP2pProject(input: {
+    name: string;
+    description?: string;
+    computeMode: string;
+    teeNodeId?: string;
+    computeFunc?: string;
+  }): Promise<{ projectId?: string }> {
+    const { data, error } = await api.POST('/api/v1alpha1/p2p/project/create', {
+      body: input as components['schemas']['CreateProjectRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<{ projectId?: string }>);
+  },
+
+  async updateP2pProject(input: { projectId: string; name?: string; description?: string }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/p2p/project/update', {
+      body: input as components['schemas']['UpdateProjectRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async listP2pProjects(): Promise<ProjectVO[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/p2p/project/list', { body: {} as any });
+    if (error) throw new Error(apiError(error));
+    return validated(z.array(ProjectVOSchema), unwrap(data as unknown as SecretPadResponse<unknown>), 'p2p/project/list');
+  },
+
+  async archiveP2pProject(projectId: string): Promise<ProjectVO[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/p2p/project/archive', {
+      body: { projectId } as components['schemas']['ArchiveProjectRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return validated(z.array(ProjectVOSchema), unwrap(data as unknown as SecretPadResponse<unknown>), 'p2p/project/archive');
+  },
+
+  async getP2pParticipants(voteId: string): Promise<ProjectParticipantsDetailVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/p2p/project/participants', {
+      body: { voteId } as components['schemas']['ProjectParticipantsRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(ProjectParticipantsDetailVOSchema, data, 'p2p/project/participants');
+  },
+
+  // ============================ user ============================
+
+  async getUser(): Promise<UserContextDTO> {
+    const { data, error } = await api.POST('/api/v1alpha1/user/get', { body: {} as any });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(UserContextDTOSchema, data, 'user/get');
+  },
+
+  async updatePassword(input: {
+    name?: string;
+    oldPasswordHash: string;
+    newPasswordHash: string;
+    confirmPasswordHash: string;
+  }): Promise<boolean> {
+    const { data, error } = await api.POST('/api/v1alpha1/user/updatePwd', {
+      body: input as components['schemas']['UserUpdatePwdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return Boolean(unwrap(data as unknown as SecretPadResponse<boolean>));
+  },
+
+  // ============================ scheduled ============================
+
+  async createScheduledGraph(input: {
+    scheduleId?: string;
+    scheduleDesc?: string;
+    cron: { startTime?: string; endTime?: string; scheduleCycle?: string; scheduleDate?: string; scheduleTime?: string };
+    projectId: string;
+    graphId: string;
+    nodes: string[];
+  }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/graph/create', {
+      body: input as components['schemas']['ScheduledGraphCreateRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async getScheduledId(projectId: string, graphId: string): Promise<string> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/id', {
+      body: { projectId, graphId } as components['schemas']['ScheduledIdRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<string>);
+  },
+
+  async getScheduledInfo(scheduleId: string): Promise<ProjectJobVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/info', {
+      body: { scheduleId } as components['schemas']['ScheduledInfoRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(ProjectJobVOSchema, data, 'scheduled/info');
+  },
+
+  async getScheduledTaskPage(scheduleId: string, page = 1, size = 100): Promise<TaskPageScheduledVO[]> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/task/page', {
+      body: { scheduleId, page, size } as components['schemas']['TaskPageScheduledRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    const payload = unwrap(data as unknown as SecretPadResponse<{ list?: TaskPageScheduledVO[]; data?: TaskPageScheduledVO[] }>);
+    return payload.list || payload.data || [];
+  },
+
+  async rerunScheduledTask(input: { scheduleId: string; scheduleTaskId: string; type?: string }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/task/rerun', {
+      body: input as components['schemas']['TaskReRunScheduledRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async stopScheduledTask(input: { scheduleId: string; scheduleTaskId: string }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/scheduled/task/stop', {
+      body: input as components['schemas']['TaskStopScheduledRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  // ============================ datatable ============================
+
+  async getDataTable(input: {
+    nodeId: string;
+    datatableId: string;
+    datasourceType?: string;
+    type?: string;
+    teeNodeId?: string;
+  }): Promise<DatatableNodeVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/datatable/get', {
+      body: input as components['schemas']['GetDatatableRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(DatatableNodeVOSchema, data, 'datatable/get');
+  },
+
+  async pushDatatableToTee(input: {
+    nodeId: string;
+    datatableId: string;
+    teeNodeId?: string;
+    datasourceId?: string;
+    relativeUri?: string;
+  }): Promise<void> {
+    const { data, error } = await api.POST('/api/v1alpha1/datatable/pushToTee', {
+      body: input as components['schemas']['PushDatatableToTeeRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    unwrapVoid(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  // ============================ datasource ============================
+
+  async getDataSourceDetail(ownerId: string, datasourceId: string, type: string): Promise<DatasourceDetailAggregateVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/datasource/detail', {
+      body: { ownerId, datasourceId, type } as components['schemas']['DatasourceDetailRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(DatasourceDetailAggregateVOSchema, data, 'datasource/detail');
+  },
+
+  async getDataSourceNodes(ownerId: string, datasourceId: string): Promise<DatasourceNodesVO> {
+    const { data, error } = await api.POST('/api/v1alpha1/datasource/nodes', {
+      body: { ownerId, datasourceId } as components['schemas']['DatasourceNodesRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrapValidated(DatasourceNodesVOSchema, data, 'datasource/nodes');
+  },
+
+  // ============================ approval ============================
+
+  async createApproval(input: { initiatorId: string; voteType: string; voteConfig?: unknown }): Promise<unknown> {
+    const { data, error } = await api.POST('/api/v1alpha1/approval/create', {
+      body: input as components['schemas']['CreateApprovalRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<unknown>);
+  },
+
+  async pullApprovalStatus(input: {
+    projectID: string;
+    jobID: string;
+    taskID: string;
+    resourceID: string;
+    resourceType?: string;
+  }): Promise<unknown> {
+    const { data, error } = await api.POST('/api/v1alpha1/approval/pull/status', {
+      body: input as components['schemas']['PullStatusRequest'],
+    });
+    if (error) throw new Error(apiError(error));
+    return unwrap(data as unknown as SecretPadResponse<unknown>);
   },
 };
