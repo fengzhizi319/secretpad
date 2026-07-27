@@ -6,6 +6,7 @@ import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
+import { DataUploadModal } from '../../features/data-upload';
 
 function parseSchemaText(text: string): { name: string; type: string }[] {
   return text
@@ -40,6 +41,7 @@ export const DataTablesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [tableName, setTableName] = useState('');
   const [datasourceId, setDatasourceId] = useState('');
   const [relativeUri, setRelativeUri] = useState('');
@@ -314,6 +316,7 @@ export const DataTablesPage: React.FC = () => {
           </select>
           <AccessGuard access={{ types: [Platform.CENTER] }}>
             <Button variant="primary" icon={<span>＋</span>} onClick={() => setIsModalOpen(true)}>{t('dataTables.import')}</Button>
+            <Button variant="outline" onClick={() => setIsUploadModalOpen(true)}>{t('dataUpload.title')}</Button>
           </AccessGuard>
         </div>
       </div>
@@ -732,6 +735,15 @@ export const DataTablesPage: React.FC = () => {
         onConfirm={() => pushTeeTarget && pushTeeMutation.mutate(pushTeeTarget)}
         onCancel={() => setPushTeeTarget(null)}
       />
+
+      {/* Data Upload Modal */}
+      <DataUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        nodes={nodes}
+        defaultNodeId={selectedNodeId}
+      />
+
     </div>
   );
 };

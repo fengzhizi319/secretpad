@@ -250,6 +250,18 @@ const zh: Dictionary = {
     status: '状态',
     columnDescription: '描述',
   },
+  dataUpload: {
+    title: '上传数据文件',
+    file: '选择本地文件',
+    upload: '上传',
+    success: '文件 {{name}} 上传成功',
+    result: '上传结果',
+    resultName: '数据源名称',
+    resultRealName: '真实文件名',
+    resultDatasource: '数据源',
+    resultType: '数据源类型',
+    missingFileOrNode: '请选择节点和文件',
+  },
   common: {
     error: '出错了：{{message}}',
     loading: '加载中...',
