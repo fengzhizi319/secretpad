@@ -242,3 +242,229 @@ corepack pnpm exec playwright test
   - 执行完整 `bash scripts1/dev-start.sh`：后端 HTTP 8080、前端 8000 首页均返回 200；`POST /api/login` 成功返回 token；`POST /api/v1alpha1/node/list` 成功返回 alice/bob 节点；执行 `bash scripts1/dev-stop.sh` 后 8000/8080/8443 端口全部释放。
 
 
+
+## 8. 迁移完成度总结与剩余功能清单
+
+> 数据来源：旧前端基于 `github.com/fengzhizi319/secretpad-frontend.git`（clone 到 `/tmp/secretpad-frontend-analysis`）的 `main` 分支；新前端基于 `secretpad/web/` 当前工作区。下文以“旧前端”指代 `secretpad-frontend`（原 `frontend-src`），“新前端”指代 `secretpad/web/`。
+
+### 8.1 对比维度说明
+
+| 维度 | 说明 |
+|---|---|
+| 页面级路由 | 旧前端 `apps/platform/config/routes.ts` 中定义的一级页面。 |
+| 模块级功能 | 旧前端 `apps/platform/src/modules/` 下的业务模块，往往被多个页面组合复用。 |
+| Pipeline 模板 | 旧前端 `modules/pipeline/templates/` 注册的 graph 模板。 |
+| 可复用组件 | 组件库、DAG 引擎、工具函数等跨页面能力。 |
+| 平台模式 | CENTER / EDGE / P2P / AUTONOMY 等部署模式下的页面差异。 |
+
+### 8.2 旧前端功能全景
+
+旧前端是一个 Umi 3 + Ant Design + Valtio 的 monorepo，主要应用为 `apps/platform`，包含 19 个页面、约 40 个业务模块、17 个 Pipeline 模板。
+
+#### 8.2.1 一级页面（routes.ts）
+
+| 路由 | 页面文件 | 承担角色 |
+|---|---|---|
+| `/login` | `pages/login.tsx` | 登录页。 |
+| `/`, `/home` | `pages/new-home.tsx` | CENTER 模式工作台（标签页：Dashboard、节点管理、数据源、数据表、项目管理、结果管理、隐私组件场景、DAG/消息/模型外链）。 |
+| `/dashboard` | `pages/dashboard.tsx` | 独立 Dashboard。 |
+| `/data-source` | `pages/data-source.tsx` | 数据源列表。 |
+| `/data-source/:id` | `pages/data-source-detail.tsx` | 数据源详情。 |
+| `/data-table` | `pages/data-table.tsx` | 数据表列表。 |
+| `/nodes` | `pages/nodes.tsx` | 节点管理（managed-node-list）。 |
+| `/graphs` | `pages/graphs.tsx` | Graph 管理列表（演示/占位页面）。 |
+| `/dag` | `pages/dag.tsx` | DAG 画布（main-dag）。 |
+| `/record` | `pages/record.tsx` | DAG / Pipeline 运行记录（record-layout）。 |
+| `/model-submission` | `pages/model-submission.tsx` | 模型提交/模型管理（model-submission-layout）。 |
+| `/periodic-task-detail` | `pages/periodic-task-detail.tsx` | 周期任务详情。 |
+| `/node` | `pages/new-node.tsx` | EDGE 模式节点首页（标签页：数据源、数据管理、合作节点、结果管理）。 |
+| `/my-node` | `pages/my-node.tsx` | P2P / EDGE 模式“我的节点”首页。 |
+| `/message` | `pages/message.tsx` | 消息中心。 |
+| `/edge` | `pages/edge.tsx` | EDGE / P2P 工作台（标签页：工作台、数据源、数据管理、合作节点、我的项目、结果管理）。 |
+| `/guide` | `pages/guide.tsx` | 新用户引导页。 |
+
+#### 8.2.2 核心模块与功能
+
+- **数据资产**：`all-data-sources`、`all-data-tables`、`data-source-list`、`data-manager`、`data-table-add`、`data-table-info`、`data-table-auth`、`data-table-tree`。
+- **项目与结果**：`project-list`、`project-content`、`create-project`、`p2p-create-project`、`p2p-project-list`、`p2p-project-detail`、`result-manager`、`result-details`。
+- **节点与机构**：`managed-node-list`、`managed-node`、`node`、`my-node`、`cooperative-node-list`、`guide-node`。
+- **DAG 与流水线**：`main-dag`、`dag-submit`、`dag-record`、`dag-result`、`dag-log`、`dag-model-submission`、`dag-modal-manager`、`dag-guide-tour`、`dag-record-guide-tour`、`pipeline`、`pipeline-record-list`。
+- **周期任务**：`periodic-task`（含 `periodic-task-list`、`periodic-task-drawer`、`periodic-child-task-list`）。
+- **组件与配置**：`component-config`、`component-tree`、`component-interpreter`、`advanced-config`、`template-quick-config`。
+- **其他业务**：`model-manager`、`message-center`、`privacy-scenes`、`guide`、`guide-pipeline`、`p2p-workbench`。
+
+#### 8.2.3 Pipeline 模板（modules/pipeline/templates）
+
+旧前端注册并支持选择以下模板创建 DAG：
+
+1. `pipeline-template-blank`：空白图。
+2. `pipeline-template-psi`：PSI 求交。
+3. `pipeline-template-psi-guide`：引导式 PSI。
+4. `pipeline-template-psi-tee`：TEE PSI。
+5. `pipeline-template-psi-tee-guide`：引导式 TEE PSI。
+6. `pipeline-template-scenario-psi`：场景 PSI。
+7. `pipeline-template-risk`：风险模型。
+8. `pipeline-template-risk-guide`：引导式风险模型。
+9. `pipeline-template-tee`：TEE 计算。
+10. `pipeline-template-tee-guide`：引导式 TEE。
+11. `pipeline-template-privacy`：隐私计算（通用）。
+12. `pipeline-template-privacy-guide`：引导式隐私计算。
+13. `pipeline-template-sanitization`：数据脱敏/数据清洗。
+14. `pipeline-template-query-obfuscation`：查询混淆。
+15. `pipeline-template-data-classification`：数据分类分级。
+16. `pipeline-template-k-anonymity`：K-匿名。
+17. `pipeline-template-l-diversity`：L-多样性。
+18. `pipeline-template-local-differential-privacy`：本地差分隐私。
+
+### 8.3 新前端功能全景
+
+新前端是 `pnpm` + Vite 5 + React 18 + TanStack Router + TanStack Query + Zustand 的 monorepo，应用为 `apps/secretpad`，包含 17 个页面、4 个 workspace 包。
+
+#### 8.3.1 一级路由（router.tsx）
+
+| 路由 | 页面 | 状态 |
+|---|---|---|
+| `/login` | `pages/login` | 已迁移。 |
+| `/dashboard` | `pages/dashboard` | 已迁移。 |
+| `/projects` | `pages/projects` | 已迁移（原 `project-list` + `project-content` 能力）。 |
+| `/nodes` | `pages/nodes` | 已迁移（原 `managed-node-list` 能力）。 |
+| `/data-tables` | `pages/data-tables` | 已迁移。 |
+| `/data-sources` | `pages/data-sources` | 已迁移。 |
+| `/data-sources/detail` | `pages/data-sources/detail` | 已迁移。 |
+| `/dag` | `pages/dag` | 部分迁移。 |
+| `/models` | `pages/models` | 已迁移（原 `model-manager` 能力）。 |
+| `/periodic-tasks` | `pages/periodic-tasks` | 已迁移。 |
+| `/messages` | `pages/messages` | 已迁移。 |
+| `/node-routes` | `pages/node-routes` | 已迁移（原 `cooperative-node-list` / `my-node` 部分能力）。 |
+| `/institutions` | `pages/institutions` | 已迁移。 |
+| `/p2p/projects` | `pages/p2p/projects` | 已迁移。 |
+| `/p2p/my-node` | `pages/p2p/my-node` | 已迁移。 |
+| `/account` | `pages/account` | 已迁移（原 `user` 密码修改等）。 |
+
+#### 8.3.2 复用包
+
+- `@secretpad/design-system`：Button、Badge、Card、Modal、ConfirmDialog、Toast 等基础组件。
+- `@secretpad/api-client`：OpenAPI 生成客户端，覆盖所有后端接口。
+- `@secretpad/dag-next`：新版 DAG 画布（组件面板、拖拽、连线、缩放、节点状态、右侧面板）。
+- `@secretpad/utils`：含 `sha256` 等通用工具。
+
+### 8.4 功能对照矩阵
+
+| 功能域 | 旧前端模块 | 新前端位置 | 迁移状态 | 备注 |
+|---|---|---|---|---|
+| 登录 / 登出 | `login` | `pages/login` + `features/auth` | ✅ 已迁移 | 密码 SHA-256 哈希一致。 |
+| Dashboard 统计与最近任务 | `dashboard` | `pages/dashboard` | ✅ 已迁移 | 新前端增加了节点拓扑。 |
+| CENTER 工作台标签页 | `new-home` | 无独立页面，改为左侧导航 | ✅ 等效 | 各标签页已拆分为独立路由。 |
+| 项目列表 / 创建 / 编辑 / 删除 | `project-list`, `create-project` | `pages/projects` | ✅ 已迁移 | 支持项目详情抽屉、参与方、数据表、任务列表。 |
+| P2P 项目列表 / 创建 / 编辑 / 归档 | `p2p-project-list`, `p2p-create-project` | `pages/p2p/projects` | ✅ 已迁移 | 支持参与者查看。 |
+| 节点列表 / 注册 / 编辑 / 删除 / Token | `managed-node-list`, `managed-node` | `pages/nodes` | ✅ 已迁移 | 新增节点详情抽屉、节点产物。 |
+| 节点路由（合作节点） | `cooperative-node-list` | `pages/node-routes` | ✅ 已迁移 | 源/目的地址编辑、刷新、删除。 |
+| P2P 我的节点 | `my-node` | `pages/p2p/my-node` | ✅ 已迁移 | 节点路由注册。 |
+| 数据源管理 | `all-data-sources`, `data-source-list` | `pages/data-sources` | ✅ 已迁移 | 含详情页。 |
+| 数据表管理 | `all-data-tables`, `data-manager`, `data-table-add`, `data-table-info`, `data-table-auth` | `pages/data-tables` | ✅ 已迁移 | 含 schema、授权、Push TEE、L1–L5 分类。 |
+| 数据表树 / 血缘 | `data-table-tree` | 无独立页面 | ⚠️ 部分迁移 | 数据表详情内有“授权链路”，但缺少完整的树形血缘视图。 |
+| 模型管理 / 打包 / 部署 / 废弃 | `model-manager`, `dag-model-submission` | `pages/models` + DAG 右侧面板 | ⚠️ 部分迁移 | 模型列表、打包、部署已迁移；从 DAG 画布直接“模型提交”的入口未迁移。 |
+| 消息中心 | `message-center` | `pages/messages` | ✅ 已迁移 | 审批/回复、详情、未读角标。 |
+| 周期任务 | `periodic-task` | `pages/periodic-tasks` | ✅ 已迁移 | 创建、下线、删除、运行记录。 |
+| 账户信息 / 修改密码 | `user` / `account` | `pages/account` | ✅ 已迁移 | 密码 SHA-256 哈希。 |
+| 机构管理 | `inst` | `pages/institutions` | ✅ 已迁移 | 机构节点增删改查。 |
+| EDGE 模式首页 | `new-node` | 无独立页面 | ❌ 未迁移 | 旧 `/node` 为 EDGE 节点首页，新前端未提供等效首页。 |
+| EDGE / P2P 工作台 | `edge`, `p2p-workbench` | 无独立页面 | ❌ 未迁移 | 旧 `/edge` 聚合工作台、合作节点、我的项目、结果管理等标签；新前端按独立路由拆分，缺少聚合工作台。 |
+| 结果管理独立页 | `result-manager` | 无独立页面 | ❌ 未迁移 | 新前端仅通过项目详情 / DAG 节点查看结果，缺少统一结果管理入口。 |
+| 隐私组件场景 | `privacy-scenes` | 无独立页面 | ❌ 未迁移 | 旧前端用于展示场景模板并快速创建项目；新前端无等效页面。 |
+| 新用户引导 | `guide`, `guide-pipeline`, `guide-node`, `guide-tour`, `dag-guide-tour`, `dag-record-guide-tour` | 无 | ❌ 未迁移 | 首次使用引导、DAG 操作引导均未实现。 |
+| DAG 模板向导 | `pipeline` | `pages/dag` | ⚠️ 部分迁移 | 仅 PSI 模板已迁移；其余 17 个模板未迁移。 |
+| DAG 模型提交入口 | `dag-model-submission` | 无 | ❌ 未迁移 | 在 DAG 运行后选择节点进行模型打包/提交的抽屉未实现。 |
+| DAG 周期任务入口 | `main-dag/periodic-task-entry` | 无 | ❌ 未迁移 | 从 DAG 直接创建周期任务的入口未实现。 |
+| DAG 运行记录 / 报告 | `dag-record`, `pipeline-record-list`, `dag-result` | 无独立页面 | ⚠️ 部分迁移 | 项目详情与 DAG 节点面板可查看单次任务日志/输出；缺少统一的 pipeline 运行记录列表和结果报告页。 |
+| DAG 高级配置 | `advanced-config` | 无 | ❌ 未迁移 | 算子高级配置抽屉未实现。 |
+| DAG 组件树 / 组件解释器 | `component-tree`, `component-interpreter`, `component-config` | `packages/dag-next` | ⚠️ 部分迁移 | 组件面板已按后端 `component/list` 分组展示；组件解释器、配置表单自动生成、面板样式注册等高级能力未迁移。 |
+| DAG 日志查看器（Monaco） | `dag-log` | DAG 节点面板 | ⚠️ 部分迁移 | 日志以文本展示，缺少 Monaco 语法高亮、折叠、搜索。 |
+| Graph 管理占位页 | `pages/graphs.tsx` | 无 | ❌ 未迁移 | 旧 `/graphs` 为 Graph 列表演示页，非核心功能。 |
+| 数据上传文件 UI | `DataController` | 无 | ❌ 未迁移 | `api-client` 已提供 `upload`/`download`/`sync`，但无页面入口。 |
+| 模型导出 / 模型发布详情 | `ModelExportController`, `model-manager/model-release` | 无 | ❌ 未迁移 | 模型导出、发布详情页未实现。 |
+| 云端日志 SLS | `CloudLogController` | 无 | ❌ 未迁移 | `cloud_log/sls` 接口未对接页面。 |
+| 特征数据源 / 投票同步 | `FeatureDatasourceController`, `VoteSyncController` | 无 | ❌ 未迁移 | 对应接口未形成独立页面。 |
+| 审批创建 / 状态轮询 | `ApprovalController` | `packages/api-client` | ⚠️ 部分迁移 | 消息中心可回复审批；主动创建审批、状态轮询 UI 未实现。 |
+| 组件版本管理 | `ComponentVersionController` | 无 | ❌ 未迁移 | 组件版本列表/切换页面未实现。 |
+
+### 8.5 未迁移功能详细清单与优先级建议
+
+#### 8.5.1 P0（影响日常核心流程，建议尽快补齐）
+
+1. **DAG 模板向导补全**（`pages/dag`）
+   - 旧模板：`privacy`、`risk`、`tee`、`sanitization`、`query-obfuscation`、`data-classification`、`k-anonymity`、`l-diversity`、`local-differential-privacy` 等。
+   - 建议：在 `pipeline-template-psi.ts` 模式基础上，逐个迁移模板文件，并统一在向导中按场景分类展示。
+
+2. **结果管理独立页面**（`pages/records` 或 `pages/results`）
+   - 旧模块：`result-manager`、`result-details`、`pipeline-record-list`。
+   - 建议：复用 `Project`/`Graph` 查询接口，提供跨项目的运行记录列表、结果报告、批量删除、下载。
+
+3. **DAG 模型提交入口**（`pages/dag` 右侧面板）
+   - 旧模块：`dag-model-submission`（`SubmissionDrawer`、`PipelineTitleComponent`）。
+   - 建议：当选中训练节点且运行成功后，在节点面板增加“Pack Model”按钮，调用 `model/pack` 并轮询状态。
+
+4. **DAG 周期任务入口**（`pages/dag`）
+   - 旧模块：`main-dag/periodic-task-entry`。
+   - 建议：在 DAG 工具栏增加“创建周期任务”按钮，将当前 graph 与 cron 表达式写入 `scheduled/graph/create`。
+
+#### 8.5.2 P1（提升体验，建议下一阶段补齐）
+
+5. **DAG 高级配置抽屉**（`packages/dag-next`）
+   - 旧模块：`advanced-config`。
+   - 建议：根据 `component/batch` 返回的 `attrs` 定义动态生成表单，替代当前原始 JSON 编辑。
+
+6. **DAG 组件解释器 / 组件树增强**
+   - 旧模块：`component-interpreter`、`component-tree`、`component-config`。
+   - 建议：支持组件图标、中文/英文描述、输入输出端口可视化、配置项校验。
+
+7. **新用户引导页**（`pages/guide`）
+   - 旧模块：`guide`、`guide-pipeline`、`guide-node`。
+   - 建议：首次登录无项目/节点时弹出的引导页，或分步 tour。
+
+8. **数据上传页面**（`pages/data-upload` 或集成到 `data-tables`）
+   - 旧接口：`DataController.upload`/`download`/`sync`。
+   - 建议：在数据表页面增加“本地上传”入口，支持 CSV/文件选择。
+
+9. **EDGE / P2P 工作台聚合页**（`pages/edge`、`pages/workbench`）
+   - 旧模块：`edge`、`p2p-workbench`。
+   - 建议：按平台类型在侧边栏首页展示聚合工作台，方便 EDGE 用户一站式查看数据/合作节点/项目/结果。
+
+10. **DAG 日志 Monaco 查看器**
+    - 旧模块：`dag-log`。
+    - 建议：引入 `@monaco-editor/react` 或简单虚拟滚动 + 高亮，提升大日志可读性。
+
+#### 8.5.3 P2（高级/低频功能，按需迁移）
+
+11. **隐私组件场景展示页**（`pages/privacy-scenes`）
+    - 用于演示场景和快速创建示例项目，产品展示价值高，但非核心生产流程。
+
+12. **模型导出与发布详情**（`pages/models`）
+    - 对接 `ModelExportController` 和 `model-manager/model-release`。
+
+13. **云端日志 SLS 页面**（`pages/cloud-logs`）
+    - 对接 `CloudLogController` 的 `cloud_log/sls`。
+
+14. **特征数据源与投票同步页面**
+    - 对接 `FeatureDatasourceController`、`VoteSyncController`。
+
+15. **组件版本管理页面**
+    - 对接 `ComponentVersionController`。
+
+16. **数据表树形血缘视图**（`data-table-tree`）
+    - 在数据表详情现有“授权链路”基础上扩展为树/图可视化。
+
+### 8.6 迁移建议
+
+1. **优先 P0**：DAG 模板、结果管理、模型提交、周期任务入口是当前用户在 DAG 上跑通完整业务闭环的最大缺口。补齐后，旧前端 90% 以上的核心操作可由新前端独立完成。
+2. **补齐 P1 体验项**：高级配置、组件解释器、引导页、数据上传完成后，新前端在生产可用性上基本追平旧前端。
+3. **P2 按需**：隐私场景、模型导出、云日志、组件版本等可按业务需求分阶段迁移，不必阻塞主线。
+4. **平台模式适配**：EDGE / P2P 工作台聚合页可以复用现有独立页面，通过新增一个“工作台”首页组件组合呈现，避免重复开发。
+5. **保持一致性**：所有新增页面继续沿用 `TanStack Router`、`TanStack Query`、`Zustand`、`@secretpad/design-system`、i18n 字典的现有模式；新增 DAG 模板继续按 `pipeline-template-*.ts` 的纯函数方式生成 graph 定义，便于测试与维护。
+
+### 8.7 当前结论
+
+- 新前端已覆盖旧前端 **登录、Dashboard、项目、节点、数据源、数据表、模型管理、消息、周期任务、账户、机构、P2P 项目/节点** 等核心 CRUD 能力。
+- **DAG 画布、结果管理、模板向导、模型提交、周期任务入口** 是剩余最显著的迁移缺口。
+- **EDGE/P2P 工作台聚合页、新用户引导、数据上传、隐私场景展示页** 是次要的体验与平台适配缺口。
+- 旧前端中部分能力（如 `pages/graphs.tsx` 占位页、部分已弃用的 CENTER 工作台）可不再迁移，直接以新前端的独立路由方式替代。
