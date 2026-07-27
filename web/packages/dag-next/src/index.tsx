@@ -1,5 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button, Badge } from '@secretpad/design-system';
+import { AttributeForm } from './attribute-form';
+import { ComponentInterpreter } from './component-interpreter';
+import { LogViewer } from './log-viewer';
+
+// 统一导出属性动态表单，供宿主应用（如需要独立使用）引用。
+export { AttributeForm, buildAttrTree } from './attribute-form';
+export type { AttributeDef, AttributeValue, AttributeFormLabels, AttributeFormProps } from './attribute-form';
+// 统一导出组件解释器。
+export { ComponentInterpreter } from './component-interpreter';
+export type { ComponentInterpreterProps, ComponentInterpreterLabels, InterpreterMetadata, IoPortMeta } from './component-interpreter';
+// 统一导出日志查看器。
+export { LogViewer } from './log-viewer';
+export type { LogViewerProps, LogViewerLabels } from './log-viewer';
 
 export type DAGNodeStatus = 'Ready' | 'Running' | 'Success' | 'Failed' | 'Staging' | 'Stopped';
 
@@ -37,8 +50,10 @@ export interface DAGComponentDef {
 
 interface ComponentMetadata {
   desc?: string;
-  inputs?: Array<{ name?: string; type?: string; desc?: string }>;
-  outputs?: Array<{ name?: string; type?: string; desc?: string }>;
+  version?: string;
+  domain?: string;
+  inputs?: Array<{ name?: string; type?: string; desc?: string; types?: string[] }>;
+  outputs?: Array<{ name?: string; type?: string; desc?: string; types?: string[] }>;
   attrs?: Array<Record<string, unknown>>;
 }
 
@@ -78,6 +93,48 @@ export interface DAGCanvasProps {
     nodeOutput?: string;
     deleteNode?: string;
     emptyCanvas?: string;
+    /** 高级配置抽屉标题。 */
+    advancedConfig?: string;
+    /** 无属性占位。 */
+    noAttrs?: string;
+    /** 可选标记。 */
+    optional?: string;
+    /** 必填标记。 */
+    required?: string;
+    /** 联合组“未选择”。 */
+    none?: string;
+    /** 列表输入占位。 */
+    listPlaceholder?: string;
+    /** 组件解释器标题。 */
+    interpreterTitle?: string;
+    /** 解释器：描述。 */
+    interpreterDesc?: string;
+    /** 解释器：输入。 */
+    interpreterInputs?: string;
+    /** 解释器：输出。 */
+    interpreterOutputs?: string;
+    /** 解释器：属性。 */
+    interpreterAttrs?: string;
+    /** 解释器：加载中。 */
+    interpreterLoading?: string;
+    /** 解释器：无定义。 */
+    interpreterNoDef?: string;
+    /** 解释器：允许类型。 */
+    interpreterTypes?: string;
+    /** 算子详情按钮提示。 */
+    interpretComponent?: string;
+    /** 日志查看器：搜索占位。 */
+    logSearchPlaceholder?: string;
+    /** 日志查看器：复制。 */
+    logCopy?: string;
+    /** 日志查看器：已复制。 */
+    logCopied?: string;
+    /** 日志查看器：自动换行。 */
+    logWrap?: string;
+    /** 日志查看器：自动滚动。 */
+    logAutoScroll?: string;
+    /** 日志查看器：行数控件。 */
+    logLines?: string;
   };
   onNodeSelect?: (node: DAGNode | null) => void;
   onNodeMove?: (node: DAGNode) => void | Promise<void>;
@@ -212,6 +269,8 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
   const [componentDef, setComponentDef] = useState<ComponentMetadata | null>(null);
   const [panelLoading, setPanelLoading] = useState(false);
   const [pendingConnection, setPendingConnection] = useState(false);
+  /** 组件解释器当前解释的算子（null 表示关闭）。 */
+  const [interpreterComponent, setInterpreterComponent] = useState<DAGComponentDef | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
 
@@ -476,7 +535,48 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
     );
   };
 
+  /**
+   * 高级配置抽屉回写入口：AttributeForm 序列化出新的 nodeDef 对象后，
+   * 同步更新当前选中节点与画布节点列表（随后由“应用配置”按钮持久化）。
+   */
+  const handleNodeDefObjectChange = (nodeDef: Record<string, any>) => {
+    if (!selectedNode) return;
+    setSelectedNode({ ...selectedNode, nodeDef });
+    setNodes((prev) =>
+      prev.map((n) => (n.id === selectedNode.id ? { ...n, nodeDef } : n))
+    );
+  };
+
   const groups = componentGroups || (components.length > 0 ? { Components: components } : {});
+
+  /**
+   * 组件解释器的定义拉取回调：复用画布的 onGetComponentDef，
+   * 以 codeName 构造一个最小伪节点来查询组件完整定义。
+   */
+  const handleInterpretFetch = async (component: DAGComponentDef) => {
+    if (!onGetComponentDef) return null;
+    const codeName = `${component.domain}/${component.name}`;
+    const pseudoNode: DAGNode = {
+      id: `__interpreter__${codeName}`,
+      name: component.name,
+      category: component.domain,
+      icon: component.icon || '⚙️',
+      status: 'Ready',
+      x: 0,
+      y: 0,
+      codeName,
+    };
+    const meta = await onGetComponentDef(pseudoNode);
+    if (!meta) return null;
+    return {
+      desc: meta.desc,
+      version: meta.version ?? component.version,
+      domain: meta.domain ?? component.domain,
+      inputs: meta.inputs,
+      outputs: meta.outputs,
+      attrs: meta.attrs,
+    };
+  };
 
   const renderComponentPalette = () => (
     <div className="w-56 bg-gray-950/80 border-r border-gray-800 flex flex-col">
@@ -493,12 +593,25 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
               return (
                 <div
                   key={`${component.domain}-${component.name}-${idx}`}
-                  onClick={() => handleAddComponent(component)}
-                  className="p-2 mt-1 rounded bg-gray-900 border border-gray-800 hover:border-blue-500 hover:bg-gray-850 cursor-pointer flex items-center gap-2 transition-all"
+                  className="p-2 mt-1 rounded bg-gray-900 border border-gray-800 hover:border-blue-500 hover:bg-gray-850 cursor-pointer flex items-center gap-2 transition-all group"
                   title={component.desc || codeName}
                 >
-                  <span>{component.icon || '⚙️'}</span>
-                  <span className="truncate">{label}</span>
+                  {/* 点击主体区域：添加算子到画布 */}
+                  <div className="flex items-center gap-2 flex-1 min-w-0" onClick={() => handleAddComponent(component)}>
+                    <span>{component.icon || '⚙️'}</span>
+                    <span className="truncate">{label}</span>
+                  </div>
+                  {/* 解释器入口：查看算子定义详情 */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInterpreterComponent(component);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-blue-400 transition-opacity flex-shrink-0"
+                    title={labels.interpretComponent ?? '查看算子详情'}
+                  >
+                    ℹ️
+                  </button>
                 </div>
               );
             })}
@@ -740,11 +853,23 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
                         </div>
                       )}
                       {componentDef.attrs && componentDef.attrs.length > 0 && (
-                        <div>
-                          <div className="text-gray-500 text-[10px] font-semibold mb-1">Attributes ({componentDef.attrs.length})</div>
-                          <div className="p-2 rounded bg-gray-950 border border-gray-800 font-mono text-[10px] text-gray-400 overflow-auto max-h-24">
-                            {safeJsonStringify(componentDef.attrs)}
-                          </div>
+                        <div className="p-3 rounded bg-gray-950 border border-gray-800">
+                          {/* 高级配置抽屉：按组件属性定义动态生成表单，替代原始 JSON 编辑 */}
+                          <AttributeForm
+                            key={selectedNode.id}
+                            defs={componentDef.attrs}
+                            nodeDef={selectedNode.nodeDef}
+                            readOnly={readOnly}
+                            onNodeDefChange={handleNodeDefObjectChange}
+                            labels={{
+                              advanced: labels.advancedConfig ?? 'Advanced Config',
+                              noAttrs: labels.noAttrs,
+                              optional: labels.optional,
+                              required: labels.required,
+                              none: labels.none,
+                              listPlaceholder: labels.listPlaceholder,
+                            }}
+                          />
                         </div>
                       )}
                     </div>
@@ -803,15 +928,29 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
               )}
 
               {activeTab === 'log' && (
-                <div className="space-y-2">
+                <div className="space-y-2 h-full flex flex-col min-h-0">
+                  {/* 状态 + 手动刷新（LogViewer 内部已提供搜索/筛选/复制等工具栏）。 */}
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">{labels.status ?? 'Status'}: {logs.status || '-'}</span>
                     <Button size="sm" variant="ghost" onClick={handleLoadLogs} loading={panelLoading}>
                       {labels.refresh ?? 'Refresh'}
                     </Button>
                   </div>
-                  <div className="p-2 rounded bg-gray-900 border border-gray-800 font-mono text-[10px] text-gray-300 h-96 overflow-auto whitespace-pre-wrap">
-                    {logs.logs.length > 0 ? logs.logs.join('\n') : (labels.noLogs ?? 'No logs')}
+                  {/* Monaco 风格日志查看器：行号 + 级别高亮 + 搜索 + 筛选。 */}
+                  <div className="flex-1 min-h-0 h-96">
+                    <LogViewer
+                      logs={logs.logs}
+                      loading={panelLoading}
+                      emptyText={labels.noLogs ?? 'No logs'}
+                      labels={{
+                        searchPlaceholder: labels.logSearchPlaceholder,
+                        copy: labels.logCopy,
+                        copied: labels.logCopied,
+                        wrap: labels.logWrap,
+                        autoScroll: labels.logAutoScroll,
+                        lines: labels.logLines,
+                      }}
+                    />
                   </div>
                 </div>
               )}
@@ -833,6 +972,23 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
           </div>
         )}
       </div>
+
+      {/* 组件解释器：查看算子定义详情 */}
+      <ComponentInterpreter
+        component={interpreterComponent}
+        fetchMetadata={handleInterpretFetch}
+        onClose={() => setInterpreterComponent(null)}
+        labels={{
+          title: labels.interpreterTitle ?? '组件解释',
+          description: labels.interpreterDesc ?? '描述',
+          inputs: labels.interpreterInputs ?? '输入',
+          outputs: labels.interpreterOutputs ?? '输出',
+          attributes: labels.interpreterAttrs ?? '可配置属性',
+          loading: labels.interpreterLoading ?? '加载组件定义中...',
+          noDefinition: labels.interpreterNoDef ?? '暂无组件定义',
+          allowedTypes: labels.interpreterTypes ?? '类型',
+        }}
+      />
     </div>
   );
 };

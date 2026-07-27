@@ -203,6 +203,14 @@ export const ServingDetailSchema = z.object({
 });
 export type ServingDetail = z.infer<typeof ServingDetailSchema>;
 
+// 模型发布详情 VO（来自 /api/v1alpha1/model/serving/detail）。
+export const ServingDetailVOSchema = z.object({
+  modelId: z.string().optional(),
+  servingId: z.string().optional(),
+  servingDetails: z.array(ServingDetailSchema).optional(),
+});
+export type ServingDetailVO = z.infer<typeof ServingDetailVOSchema>;
+
 export const ModelPackInfoVOSchema = z.object({
   modelStats: z.string().optional(),
   servingDetails: z.array(ServingDetailSchema).optional(),

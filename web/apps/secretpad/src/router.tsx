@@ -36,6 +36,11 @@ const P2pProjectsPage = lazyPage(() => import('./pages/p2p/projects'), 'P2pProje
 const P2pMyNodePage = lazyPage(() => import('./pages/p2p/my-node'), 'P2pMyNodePage');
 const AccountPage = lazyPage(() => import('./pages/account'), 'AccountPage');
 const PrivacyScenesPage = lazyPage(() => import('./pages/privacy-scenes'), 'PrivacyScenesPage');
+const GuidePage = lazyPage(() => import('./pages/guide'), 'GuidePage');
+const WorkbenchPage = lazyPage(() => import('./pages/workbench'), 'WorkbenchPage');
+const CloudLogsPage = lazyPage(() => import('./pages/cloud-logs'), 'CloudLogsPage');
+const FeatureDatasourcePage = lazyPage(() => import('./pages/feature-datasource'), 'FeatureDatasourcePage');
+const ComponentVersionsPage = lazyPage(() => import('./pages/component-versions'), 'ComponentVersionsPage');
 
 /**
  * Read the auth token directly from localStorage (not the Zustand store).
@@ -267,6 +272,36 @@ export const accountRoute = createRoute({
   component: AccountPage,
 });
 
+export const guideRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/guide',
+  component: GuidePage,
+});
+
+export const workbenchRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/workbench',
+  component: WorkbenchPage,
+});
+
+export const cloudLogsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cloud-logs',
+  component: CloudLogsPage,
+});
+
+export const featureDatasourceRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/feature-datasource',
+  component: FeatureDatasourcePage,
+});
+
+export const componentVersionsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/component-versions',
+  component: ComponentVersionsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -288,6 +323,11 @@ const routeTree = rootRoute.addChildren([
     p2pProjectsRoute,
     p2pMyNodeRoute,
     accountRoute,
+    guideRoute,
+    workbenchRoute,
+    cloudLogsRoute,
+    featureDatasourceRoute,
+    componentVersionsRoute,
   ]),
 ]);
 

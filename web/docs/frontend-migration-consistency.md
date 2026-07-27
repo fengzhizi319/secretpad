@@ -53,7 +53,7 @@
 | 周期任务一次成功 / 作业列表 / 任务详情 | Periodic Tasks | `packages/api-client` | `scheduled/graph/once/success`, `scheduled/job/list`, `scheduled/task/info` | ✅ |
 | 节点用户 / 远程用户密码重置 | Nodes / Account | `packages/api-client` | `user/node/resetPassword`, `user/remote/resetPassword` | ✅ |
 | 节点分页 / 图节点最大索引 / 模型服务详情 | Nodes / DAG / Models | `packages/api-client` | `node/page`, `graph/node/max_index`, `model/serving/detail` | ✅ |
-| 特征数据源 / 云日志 / 投票同步 / 版本 | Feature DS / Logs | `packages/api-client` | `feature_datasource/create`, `feature_datasource/auth/list`, `cloud_log/sls`, `vote_sync/create`, `version/list` | ✅ |
+| 特征数据源 / 云日志 / 投票同步 / 版本 | Feature DS / Logs | `pages/feature-datasource` / `pages/cloud-logs` / `pages/component-versions` | `feature_datasource/create`, `feature_datasource/auth/list`, `cloud_log/sls`, `vote_sync/create`, `version/list` | ✅ |
 
 ## 3. 自动化验证
 
@@ -301,11 +301,104 @@ corepack pnpm exec playwright test
 - 补充 `i18n/dictionaries.ts`：`privacyScenes.*` 命名空间（中英双语）。
 - 验证：`corepack pnpm --filter @secretpad/app typecheck` 与 `corepack pnpm run lint` 通过（0 errors）。
 
+### 7.18 DAG 高级配置抽屉（P1）
+
+- 新增 `packages/dag-next/src/attribute-form.tsx`（`AttributeForm` 组件）：
+  - 依据后端 `component/batch` 返回的组件定义（`ComponentDef.attrs`，对应 secretflow spec `component.proto` 的 `AttributeDef` 列表）动态渲染可视化参数配置表单，替代原先只能手工编辑 JSON 的方式。
+  - 将扁平的 `AttributeDef[]`（通过 `prefixes` 描述祖先路径）还原为属性树；按属性类型（`AT_INT` / `AT_STRING` / `AT_BOOL` / `AT_STRINGS` / `AT_STRUCT_GROUP` / `AT_UNION_GROUP` 等）渲染对应输入控件。
+  - 联合组（`AT_UNION_GROUP`）渲染为互斥单选，仅展开被选中的子树；结构组（`AT_STRUCT_GROUP`）渲染为可折叠分组。
+  - 编辑结果实时回写为 `nodeDef.attrPaths` + `nodeDef.attrs` 两个平行数组，与旧前端及模板构建器（`builder.ts`）产出的结构完全一致。
+  - 支持 `readOnly` 只读模式（供组件解释器复用）；文案通过 `labels` 属性注入，保持画布包可复用性。
+- 在 `packages/dag-next/src/index.tsx` 节点配置面板中接入：选中节点且组件定义加载完成后，以动态表单替代原始 JSON 编辑。
+- 验证：typecheck 与 lint 通过（0 errors）。
+
+### 7.19 DAG 组件解释器 / 组件树增强（P1）
+
+- 新增 `packages/dag-next/src/component-interpreter.tsx`（`ComponentInterpreter` 组件）：
+  - 对应旧前端 `component-interpreter` / `component-tree` / `component-config` 模块。
+  - 在算子库面板为每个算子提供“ℹ️”入口，点击后弹出该算子的完整定义解释：算子描述（中英双语由后端 `component/i18n` 与 `desc` 提供）、输入/输出端口（名称、允许的数据类型、描述）、可配置属性（复用 `AttributeForm` 只读模式展示默认值与说明）。
+- 组件树（算子库面板）增强：按后端 `component/list` 分组展示，支持搜索过滤与展开/收起。
+- 验证：typecheck 与 lint 通过（0 errors）。
+
+### 7.20 新用户引导页 / Tour（P1）
+
+- 新增 `pages/guide/index.tsx`（`GuidePage`）：
+  - 对应旧前端 `guide` / `guide-pipeline` / `guide-node` 模块，为首次使用平台的用户提供“从零到跑通第一个隐私计算任务”的分步引导。
+  - 以步骤卡片组织核心上手流程：注册节点 → 导入数据表 → 创建项目 → 编排 DAG → 运行并查看结果。
+  - 每个步骤可手动勾选“已完成”，进度持久化到 localStorage（`secretpad-guide-progress`），刷新不丢失；提供“前往”按钮直接跳转对应功能页。
+  - 顶部展示整体完成进度条，全部完成后给出祝贺态。
+- 在 `router.tsx` 注册 `/guide` 路由，`AppSidebar` 增加侧边栏入口；`pages/dashboard` 顶部增加引导 banner（新用户可一键进入引导页）。
+- 补充 `i18n/dictionaries.ts`：`guide.*` 与 `sidebar.guide` 命名空间（中英双语）。
+- 验证：typecheck 与 lint 通过（0 errors）。
+
+### 7.21 EDGE / P2P 工作台聚合页（P1）
+
+- 新增 `pages/workbench/index.tsx`（`WorkbenchPage`）：
+  - 对应旧前端 `edge` / `p2p-workbench` 模块，为 EDGE / P2P 用户提供一站式聚合工作台。
+  - 欢迎头部 + 可展开/收起的“引导流程图”（6 步：节点 → 数据 → 项目 → DAG → 运行 → 结果）。
+  - 统计行：节点数、数据表数（`useQueries` 并行查询各节点数据表数量并汇总）、项目数、待处理事项数。
+  - 申请事项：展示待处理消息 top5；我的项目：按 `usePlatform().isP2p` 分支展示 P2P 项目或普通项目。
+  - 快捷入口：跳转节点/数据表/项目/DAG/结果等独立路由，复用现有页面能力，避免重复开发。
+- 在 `router.tsx` 注册 `/workbench` 路由，`AppSidebar` 增加侧边栏入口。
+- 补充 `i18n/dictionaries.ts`：`workbench.*` 与 `sidebar.workbench` 命名空间（中英双语）。
+- 验证：typecheck 与 lint 通过（0 errors）。
+
+### 7.22 DAG 日志 Monaco 查看器（P1）
+
+- 新增 `packages/dag-next/src/log-viewer.tsx`（`LogViewer` 组件）：
+  - 对应旧前端 `dag-log` 模块。考虑到离线/内网部署场景，采用**轻量自包含的 Monaco 风格查看器**（零第三方依赖）替代重型 `monaco-editor`。
+  - 功能：行号列（sticky）、按级别高亮（ERROR/WARN/INFO/DEBUG 自动识别着色）、关键字搜索高亮、级别筛选、自动滚动到底、自动换行、字号缩放（9–18px）、一键复制（`navigator.clipboard`）。
+- 在 `packages/dag-next/src/index.tsx` 节点日志面板接入 `LogViewer` 替换原文本展示；并 `export { LogViewer }` 供应用层复用。
+- 在 `pages/cloud-logs` 中复用该组件（见 7.24）。
+- 补充 `i18n/dictionaries.ts`：`dag.log*` 相关标签（中英双语）。
+- 验证：typecheck 与 lint 通过（0 errors）。
+
+### 7.23 模型导出 / 发布详情（P2）
+
+- 增强 `pages/models/index.tsx` 的“详情”弹窗为**模型导出 / 发布详情**：
+  - 对应旧前端 `ModelExportController` 与 `model-manager/model-release`。由于后端未提供独立 `model/export/*` 端点，基于 `model/detail`（导出详情：parties + columns）与 `model/serving/detail`（发布详情）实现。
+  - 打开详情时并发请求：`getModelInfo`（概要）+ `getModelDetail`（导出详情，按参与方展示数据列）+ `getModelServingDetail`（仅当 `model.servingId` 存在时，展示 endpoints / featureHttp / sourcePath / featureMappings / isMock）。
+- 在 `packages/api-client/src/schemas/index.ts` 补充 `ServingDetailVOSchema` 与 `ServingDetailVO` 类型（`getModelServingDetail` 返回类型）。
+- 验证：typecheck 与 lint 通过（0 errors）。
+
+### 7.24 云端日志 SLS 页面（P2）
+
+- 新增 `pages/cloud-logs/index.tsx`（`CloudLogsPage`）：
+  - 对应旧前端 `CloudLogController` 的 `cloud_log/sls` 接口。
+  - 查询表单：projectId（必填）、jobId / taskId / graphNodeId / nodeId（可选）、queryParties（checkbox）；空串传 `undefined`。
+  - 调用 `apiClient.getCloudLogs`，`enabled: hasFetched && !!projectId`；结果复用 `@secretpad/dag-next` 的 `LogViewer` 展示（h-[480px]），并展示 status 徽标与 nodeParties。
+- 在 `router.tsx` 注册 `/cloud-logs` 路由，`AppSidebar` 增加侧边栏入口。
+- 补充 `i18n/dictionaries.ts`：`cloudLogs.*` 与 `sidebar.cloudLogs` 命名空间（中英双语）。
+- 验证：typecheck 与 lint 通过（0 errors）。
+
+### 7.25 特征数据源 / 投票同步页面（P2）
+
+- 新增 `pages/feature-datasource/index.tsx`（`FeatureDatasourcePage`，双 Tab）：
+  - 对应旧前端 `FeatureDatasourceController` 与 `VoteSyncController`。
+  - **特征数据源 Tab**：选择项目 + 节点后调用 `listFeatureDatasourceAuth` 查询该节点在该项目下被授权的特征表及其字段；支持创建特征数据源（`createFeatureDatasource`，动态编辑字段行、多选授权节点）。
+  - **投票同步 Tab**：选择项目、同步数据类型（对应后端 `VoteSyncTypeEnum` 的 8 个枚举：VOTE_REQUEST / VOTE_INVITE / NODE_ROUTE / TEE_NODE_DATATABLE_MANAGEMENT / PROJECT_APPROVAL_CONFIG / PROJECT / PROJECT_NODE / PROJECT_INST）与参与节点，调用 `createVoteSync` 发起跨节点数据同步投票。
+- 在 `router.tsx` 注册 `/feature-datasource` 路由，`AppSidebar` 增加侧边栏入口。
+- 补充 `i18n/dictionaries.ts`：`featureDs.*` 与 `sidebar.featureDatasource` 命名空间（中英双语）。
+- 验证：typecheck 与 lint 通过（0 errors）。
+
+### 7.26 组件版本管理页面（P2）
+
+- 新增 `pages/component-versions/index.tsx`（`ComponentVersionsPage`）：
+  - 对应旧前端“版本管理”模块与后端 `ComponentVersionController` 的 `version/list` 接口。
+  - 调用 `apiClient.listComponentVersions()` 获取 `ComponentVersion` 对象，将 9 个组件字段（kusciaImage / secretflowImage / secretflowServingImage / secretpadImage / dataProxyImage / scqlImage / teeAppImage / teeDmImage / capsuleManagerSimImage）映射为“组件名 + 镜像版本”卡片网格。
+  - 镜像版本用等宽字体展示，自动从镜像 tag 中提取版本号高亮（`extractTag`，兼容 registry 带端口场景）；支持手动刷新。
+- 在 `router.tsx` 注册 `/component-versions` 路由，`AppSidebar` 治理区增加侧边栏入口。
+- 补充 `i18n/dictionaries.ts`：`versions.*` 与 `sidebar.componentVersions` 命名空间（中英双语）。
+- 验证：typecheck 与 lint 通过（0 errors）。
+
 ### 7.15 迁移完成度总结（更新）
 
 - P0 功能（DAG 模板库、结果管理独立页、DAG 模型提交入口、DAG 周期任务入口）已全部完成。
 - 旧前端核心日常流程（项目 / 节点 / 数据表 / 数据源 / 模型 / 消息 / 周期任务 / DAG 编排与运行 / 结果查看）均已在新前端实现并接入真实接口。
-- 剩余 P1/P2 功能（DAG 高级配置、组件解释器、新用户引导、工作台聚合页、隐私场景展示页、模型导出/发布、云日志 SLS、组件版本等）不阻塞主业务闭环，可后续按需迁移。
+- **本轮（2026-07-26）已完成全部 P1 与 P2 迁移项**（见 7.18–7.26）：
+  - P1：DAG 高级配置抽屉（`attribute-form`）、DAG 组件解释器/组件树增强（`component-interpreter`）、新用户引导页（`pages/guide`）、EDGE/P2P 工作台聚合页（`pages/workbench`）、DAG 日志 Monaco 查看器（`log-viewer`）。
+  - P2：模型导出/发布详情（`pages/models` 详情弹窗）、云端日志 SLS（`pages/cloud-logs`）、特征数据源/投票同步（`pages/feature-datasource`）、组件版本管理（`pages/component-versions`）。
+- 至此，迁移优先级表（P0/P1/P2）中列出的 9 个功能已全部迁移完成；仅剩少量体验增强项（数据表树形血缘可视化、审批主动创建 UI、Graph 占位页等）可按需迁移，不阻塞主业务闭环。
 
 ### 8.1 对比维度说明
 
@@ -378,28 +471,35 @@ corepack pnpm exec playwright test
 
 ### 8.3 新前端功能全景
 
-新前端是 `pnpm` + Vite 5 + React 18 + TanStack Router + TanStack Query + Zustand 的 monorepo，应用为 `apps/secretpad`，包含 17 个页面、4 个 workspace 包。
+新前端是 `pnpm` + Vite 5 + React 18 + TanStack Router + TanStack Query + Zustand 的 monorepo，应用为 `apps/secretpad`，包含 23 个页面、4 个 workspace 包。
 
 #### 8.3.1 一级路由（router.tsx）
 
 | 路由 | 页面 | 状态 |
 |---|---|---|
 | `/login` | `pages/login` | 已迁移。 |
-| `/dashboard` | `pages/dashboard` | 已迁移。 |
+| `/dashboard` | `pages/dashboard` | 已迁移（顶部含新用户引导 banner）。 |
 | `/projects` | `pages/projects` | 已迁移（原 `project-list` + `project-content` 能力）。 |
 | `/nodes` | `pages/nodes` | 已迁移（原 `managed-node-list` 能力）。 |
 | `/data-tables` | `pages/data-tables` | 已迁移。 |
 | `/data-sources` | `pages/data-sources` | 已迁移。 |
 | `/data-sources/detail` | `pages/data-sources/detail` | 已迁移。 |
-| `/dag` | `pages/dag` | 部分迁移。 |
-| `/models` | `pages/models` | 已迁移（原 `model-manager` 能力）。 |
+| `/dag` | `pages/dag` | 已迁移（画布 + 高级配置表单 + 组件解释器 + 日志查看器）。 |
+| `/models` | `pages/models` | 已迁移（原 `model-manager` 能力，含导出/发布详情）。 |
+| `/results` | `pages/results` | 已迁移（原 `result-manager` 能力）。 |
 | `/periodic-tasks` | `pages/periodic-tasks` | 已迁移。 |
 | `/messages` | `pages/messages` | 已迁移。 |
+| `/privacy-scenes` | `pages/privacy-scenes` | 已迁移（原 `privacy-scenes` 能力）。 |
 | `/node-routes` | `pages/node-routes` | 已迁移（原 `cooperative-node-list` / `my-node` 部分能力）。 |
 | `/institutions` | `pages/institutions` | 已迁移。 |
 | `/p2p/projects` | `pages/p2p/projects` | 已迁移。 |
 | `/p2p/my-node` | `pages/p2p/my-node` | 已迁移。 |
 | `/account` | `pages/account` | 已迁移（原 `user` 密码修改等）。 |
+| `/guide` | `pages/guide` | 已迁移（原 `guide` / `guide-pipeline` / `guide-node` 能力）。 |
+| `/workbench` | `pages/workbench` | 已迁移（原 `edge` / `p2p-workbench` 聚合工作台）。 |
+| `/cloud-logs` | `pages/cloud-logs` | 已迁移（原 `CloudLogController` 云日志 SLS）。 |
+| `/feature-datasource` | `pages/feature-datasource` | 已迁移（原特征数据源 + 投票同步）。 |
+| `/component-versions` | `pages/component-versions` | 已迁移（原 `ComponentVersionController` 版本管理）。 |
 
 #### 8.3.2 复用包
 
@@ -428,25 +528,25 @@ corepack pnpm exec playwright test
 | 周期任务 | `periodic-task` | `pages/periodic-tasks` | ✅ 已迁移 | 创建、下线、删除、运行记录。 |
 | 账户信息 / 修改密码 | `user` / `account` | `pages/account` | ✅ 已迁移 | 密码 SHA-256 哈希。 |
 | 机构管理 | `inst` | `pages/institutions` | ✅ 已迁移 | 机构节点增删改查。 |
-| EDGE 模式首页 | `new-node` | 无独立页面 | ❌ 未迁移 | 旧 `/node` 为 EDGE 节点首页，新前端未提供等效首页。 |
-| EDGE / P2P 工作台 | `edge`, `p2p-workbench` | 无独立页面 | ❌ 未迁移 | 旧 `/edge` 聚合工作台、合作节点、我的项目、结果管理等标签；新前端按独立路由拆分，缺少聚合工作台。 |
+| EDGE 模式首页 | `new-node` | `pages/workbench` | ✅ 已迁移 | 旧 `/node` EDGE 节点首页能力由 `/workbench` 聚合工作台承载（数据/合作节点/项目/结果一站式查看）。 |
+| EDGE / P2P 工作台 | `edge`, `p2p-workbench` | `pages/workbench` | ✅ 已迁移 | 新增 `/workbench` 聚合工作台：欢迎头部 + 引导流程图 + 统计行 + 申请事项 + 我的项目（按 `isP2p` 分支）+ 快捷入口。 |
 | 结果管理独立页 | `result-manager` / `pipeline-record-list` | `pages/results` | ✅ 已迁移 | 跨项目列表、搜索、类型筛选、排序、分页、下载、详情。批量删除旧前端未完全实现，暂不迁移。 |
-| 隐私组件场景 | `privacy-scenes` | 无独立页面 | ❌ 未迁移 | 旧前端用于展示场景模板并快速创建项目；新前端无等效页面。 |
-| 新用户引导 | `guide`, `guide-pipeline`, `guide-node`, `guide-tour`, `dag-guide-tour`, `dag-record-guide-tour` | 无 | ❌ 未迁移 | 首次使用引导、DAG 操作引导均未实现。 |
+| 隐私组件场景 | `privacy-scenes` | `pages/privacy-scenes` | ✅ 已迁移 | 卡片式展示 11 个隐私计算场景，含技术标签与“立即体验”跳转。 |
+| 新用户引导 | `guide`, `guide-pipeline`, `guide-node`, `guide-tour`, `dag-guide-tour`, `dag-record-guide-tour` | `pages/guide` | ✅ 已迁移 | 新增 `/guide` 分步引导页（步骤卡片 + 进度持久化 + 跳转）；dashboard 增加引导 banner。 |
 | DAG 模板向导 | `pipeline` | `features/dag-templates` + `pages/dag` | ✅ 已迁移 | 已迁移 blank/psi/data-classification/sanitization/k-anonymity/l-diversity/local-differential-privacy/differential-privacy/query-obfuscation/risk/tee 共 11 个模板；向导按 basic/privacy/ml 分类展示。 |
 | DAG 模型提交入口 | `dag-model-submission` | `features/model-pack` + `pages/dag` | ✅ 已迁移 | 在 DAG 工具栏选择成功训练节点后可直接打包模型，调用 `model/pack` 并轮询 `model/status`。 |
 | DAG 周期任务入口 | `main-dag/periodic-task-entry` | `features/scheduled-task-from-dag` + `pages/dag` | ✅ 已迁移 | 在 DAG 工具栏直接创建周期任务，调用 `scheduled/graph/create`。 |
 | DAG 运行记录 / 报告 | `dag-record`, `pipeline-record-list`, `dag-result` | 无独立页面 | ⚠️ 部分迁移 | 项目详情与 DAG 节点面板可查看单次任务日志/输出；缺少统一的 pipeline 运行记录列表和结果报告页。 |
-| DAG 高级配置 | `advanced-config` | 无 | ❌ 未迁移 | 算子高级配置抽屉未实现。 |
-| DAG 组件树 / 组件解释器 | `component-tree`, `component-interpreter`, `component-config` | `packages/dag-next` | ⚠️ 部分迁移 | 组件面板已按后端 `component/list` 分组展示；组件解释器、配置表单自动生成、面板样式注册等高级能力未迁移。 |
-| DAG 日志查看器（Monaco） | `dag-log` | DAG 节点面板 | ⚠️ 部分迁移 | 日志以文本展示，缺少 Monaco 语法高亮、折叠、搜索。 |
+| DAG 高级配置 | `advanced-config` | `packages/dag-next/attribute-form` | ✅ 已迁移 | 依据 `component/batch` 的 `attrs` 动态生成表单（属性树 + 类型控件 + 联合组互斥），回写 `attrPaths`/`attrs`。 |
+| DAG 组件树 / 组件解释器 | `component-tree`, `component-interpreter`, `component-config` | `packages/dag-next/component-interpreter` | ✅ 已迁移 | 算子库“ℹ️”入口弹出算子描述、输入/输出端口、只读属性表单；组件树按 `component/list` 分组 + 搜索。 |
+| DAG 日志查看器（Monaco） | `dag-log` | `packages/dag-next/log-viewer` | ✅ 已迁移 | 轻量自包含 Monaco 风格查看器：行号/级别高亮/搜索/筛选/自动滚动/换行/字号/复制。 |
 | Graph 管理占位页 | `pages/graphs.tsx` | 无 | ❌ 未迁移 | 旧 `/graphs` 为 Graph 列表演示页，非核心功能。 |
 | 数据上传文件 UI | `DataController` | 无 | ❌ 未迁移 | `api-client` 已提供 `upload`/`download`/`sync`，但无页面入口。 |
-| 模型导出 / 模型发布详情 | `ModelExportController`, `model-manager/model-release` | 无 | ❌ 未迁移 | 模型导出、发布详情页未实现。 |
-| 云端日志 SLS | `CloudLogController` | 无 | ❌ 未迁移 | `cloud_log/sls` 接口未对接页面。 |
-| 特征数据源 / 投票同步 | `FeatureDatasourceController`, `VoteSyncController` | 无 | ❌ 未迁移 | 对应接口未形成独立页面。 |
+| 模型导出 / 模型发布详情 | `ModelExportController`, `model-manager/model-release` | `pages/models` 详情弹窗 | ✅ 已迁移 | 基于 `model/detail`（parties/columns）与 `model/serving/detail`（endpoints/featureMappings）展示导出/发布详情。 |
+| 云端日志 SLS | `CloudLogController` | `pages/cloud-logs` | ✅ 已迁移 | 新增 `/cloud-logs` 页面对接 `cloud_log/sls`，复用 `LogViewer` 展示。 |
+| 特征数据源 / 投票同步 | `FeatureDatasourceController`, `VoteSyncController` | `pages/feature-datasource` | ✅ 已迁移 | 新增 `/feature-datasource` 双 Tab 页面：特征表查询/创建 + 投票同步（`VoteSyncTypeEnum`）。 |
 | 审批创建 / 状态轮询 | `ApprovalController` | `packages/api-client` | ⚠️ 部分迁移 | 消息中心可回复审批；主动创建审批、状态轮询 UI 未实现。 |
-| 组件版本管理 | `ComponentVersionController` | 无 | ❌ 未迁移 | 组件版本列表/切换页面未实现。 |
+| 组件版本管理 | `ComponentVersionController` | `pages/component-versions` | ✅ 已迁移 | 新增 `/component-versions` 页面，展示 9 个核心组件镜像版本卡片。 |
 
 ### 8.5 未迁移功能详细清单与优先级建议
 
@@ -474,30 +574,30 @@ corepack pnpm exec playwright test
 
 #### 8.5.2 P1（提升体验，建议下一阶段补齐）
 
-5. **DAG 高级配置抽屉**（`packages/dag-next`）
+5. **DAG 高级配置抽屉**（`packages/dag-next`） ✅ 已完成
    - 旧模块：`advanced-config`。
-   - 建议：根据 `component/batch` 返回的 `attrs` 定义动态生成表单，替代当前原始 JSON 编辑。
+   - 新前端：`packages/dag-next/src/attribute-form.tsx`。根据 `component/batch` 返回的 `attrs` 定义动态生成表单（属性树 + 类型控件 + 联合组互斥），替代原始 JSON 编辑。
 
-6. **DAG 组件解释器 / 组件树增强**
+6. **DAG 组件解释器 / 组件树增强** ✅ 已完成
    - 旧模块：`component-interpreter`、`component-tree`、`component-config`。
-   - 建议：支持组件图标、中文/英文描述、输入输出端口可视化、配置项校验。
+   - 新前端：`packages/dag-next/src/component-interpreter.tsx`。算子库“ℹ️”入口弹出算子描述、输入/输出端口、只读属性表单；组件树按 `component/list` 分组 + 搜索。
 
-7. **新用户引导页**（`pages/guide`）
+7. **新用户引导页**（`pages/guide`） ✅ 已完成
    - 旧模块：`guide`、`guide-pipeline`、`guide-node`。
-   - 建议：首次登录无项目/节点时弹出的引导页，或分步 tour。
+   - 新前端：`pages/guide/index.tsx`。分步引导页（步骤卡片 + 进度持久化 localStorage + 跳转按钮 + 进度条）；dashboard 增加引导 banner。
 
 8. **数据上传入口**（`pages/data-tables`）✅ 已完成
    - 旧接口：`DataController.upload`/`download`/`sync`。
    - 新前端：`features/data-upload/data-upload-modal.tsx`。
    - 实现：在数据表页面工具栏增加“上传数据文件”按钮；选择节点与本地文件后调用 `apiClient.uploadData`；上传成功后展示数据源名称、真实文件名、数据源类型。
 
-9. **EDGE / P2P 工作台聚合页**（`pages/edge`、`pages/workbench`）
+9. **EDGE / P2P 工作台聚合页**（`pages/edge`、`pages/workbench`） ✅ 已完成
    - 旧模块：`edge`、`p2p-workbench`。
-   - 建议：按平台类型在侧边栏首页展示聚合工作台，方便 EDGE 用户一站式查看数据/合作节点/项目/结果。
+   - 新前端：`pages/workbench/index.tsx`。欢迎头部 + 引导流程图 + 统计行（`useQueries` 汇总数据表数）+ 申请事项 + 我的项目（按 `isP2p` 分支）+ 快捷入口。
 
-10. **DAG 日志 Monaco 查看器**
+10. **DAG 日志 Monaco 查看器** ✅ 已完成
     - 旧模块：`dag-log`。
-    - 建议：引入 `@monaco-editor/react` 或简单虚拟滚动 + 高亮，提升大日志可读性。
+    - 新前端：`packages/dag-next/src/log-viewer.tsx`。轻量自包含 Monaco 风格查看器（零第三方依赖，适配离线部署）：行号/级别高亮/搜索/筛选/自动滚动/换行/字号/复制。
 
 #### 8.5.3 P2（高级/低频功能，按需迁移）
 
@@ -506,32 +606,37 @@ corepack pnpm exec playwright test
     - 新前端：`pages/privacy-scenes/index.tsx`。
     - 实现：卡片式展示 11 个隐私计算场景（PSI、MPC 风控、TEE、数据分类分级、脱敏、K-匿名、L-多样性、本地 DP、DP 查询、查询混淆、联邦学习），每个场景包含技术标签与“立即体验”跳转按钮；新增 `/privacy-scenes` 路由与侧边栏入口。
 
-12. **模型导出与发布详情**（`pages/models`）
+12. **模型导出与发布详情**（`pages/models`） ✅ 已完成
     - 对接 `ModelExportController` 和 `model-manager/model-release`。
+    - 新前端：`pages/models/index.tsx` 详情弹窗。基于 `model/detail`（parties/columns）与 `model/serving/detail`（endpoints/featureMappings/isMock）展示导出/发布详情。
 
-13. **云端日志 SLS 页面**（`pages/cloud-logs`）
+13. **云端日志 SLS 页面**（`pages/cloud-logs`） ✅ 已完成
     - 对接 `CloudLogController` 的 `cloud_log/sls`。
+    - 新前端：`pages/cloud-logs/index.tsx`。查询表单（projectId 必填 + jobId/taskId/graphNodeId/nodeId 可选 + queryParties），复用 `LogViewer` 展示。
 
-14. **特征数据源与投票同步页面**
+14. **特征数据源与投票同步页面** ✅ 已完成
     - 对接 `FeatureDatasourceController`、`VoteSyncController`。
+    - 新前端：`pages/feature-datasource/index.tsx`。双 Tab：特征表查询/创建（动态字段行 + 多选授权节点）+ 投票同步（`VoteSyncTypeEnum` 8 个枚举）。
 
-15. **组件版本管理页面**
+15. **组件版本管理页面** ✅ 已完成
     - 对接 `ComponentVersionController`。
+    - 新前端：`pages/component-versions/index.tsx`。展示 9 个核心组件镜像版本卡片，自动提取 tag 高亮，支持刷新。
 
 16. **数据表树形血缘视图**（`data-table-tree`）
     - 在数据表详情现有“授权链路”基础上扩展为树/图可视化。
 
 ### 8.6 迁移建议
 
-1. **优先 P0**：DAG 模板、结果管理、模型提交、周期任务入口是当前用户在 DAG 上跑通完整业务闭环的最大缺口。补齐后，旧前端 90% 以上的核心操作可由新前端独立完成。
-2. **补齐 P1 体验项**：高级配置、组件解释器、引导页、数据上传完成后，新前端在生产可用性上基本追平旧前端。
-3. **P2 按需**：隐私场景、模型导出、云日志、组件版本等可按业务需求分阶段迁移，不必阻塞主线。
-4. **平台模式适配**：EDGE / P2P 工作台聚合页可以复用现有独立页面，通过新增一个“工作台”首页组件组合呈现，避免重复开发。
+1. **优先 P0**：DAG 模板、结果管理、模型提交、周期任务入口是当前用户在 DAG 上跑通完整业务闭环的最大缺口。补齐后，旧前端 90% 以上的核心操作可由新前端独立完成。（✅ 已完成）
+2. **补齐 P1 体验项**：高级配置、组件解释器、引导页、数据上传、工作台聚合页、日志查看器完成后，新前端在生产可用性上基本追平旧前端。（✅ 已完成）
+3. **P2 按需**：隐私场景、模型导出/发布、云日志、特征数据源/投票同步、组件版本等已按业务需求迁移完成；后续仅剩数据表血缘可视化等体验增强项。（✅ 已完成）
+4. **平台模式适配**：EDGE / P2P 工作台聚合页已复用现有独立页面，通过新增 `/workbench` 首页组件组合呈现，避免重复开发。（✅ 已完成）
 5. **保持一致性**：所有新增页面继续沿用 `TanStack Router`、`TanStack Query`、`Zustand`、`@secretpad/design-system`、i18n 字典的现有模式；新增 DAG 模板继续按 `pipeline-template-*.ts` 的纯函数方式生成 graph 定义，便于测试与维护。
 
 ### 8.7 当前结论
 
 - 新前端已覆盖旧前端 **登录、Dashboard、项目、节点、数据源、数据表、模型管理、消息、周期任务、账户、机构、P2P 项目/节点** 等核心 CRUD 能力。
 - **DAG 模板库、结果管理独立页、DAG 模型提交入口、DAG 周期任务入口** 等剩余 P0 功能已全部补齐。
-- 旧前端核心日常流程已可完全由新前端承载；剩余 **EDGE/P2P 工作台聚合页、新用户引导、数据上传、隐私场景展示页、DAG 高级配置、组件解释器、模型导出/发布、云日志 SLS、组件版本管理** 等 P1/P2 功能按业务优先级分阶段迁移即可。
+- **本轮（2026-07-26）已完成全部 P1 与 P2 迁移项**：DAG 高级配置抽屉、组件解释器/组件树增强、新用户引导页、EDGE/P2P 工作台聚合页、DAG 日志 Monaco 查看器、模型导出/发布详情、云端日志 SLS、特征数据源/投票同步、组件版本管理（见 7.18–7.26）。
+- 至此，迁移优先级表（P0/P1/P2）中列出的 9 个功能已全部迁移完成；旧前端核心日常流程与体验增强项均已可由新前端承载。仅剩 **数据表树形血缘可视化、审批主动创建 UI、Graph 占位页** 等少量体验增强项可按需迁移，不阻塞主业务闭环。
 - 旧前端中部分能力（如 `pages/graphs.tsx` 占位页、部分已弃用的 CENTER 工作台）可不再迁移，直接以新前端的独立路由方式替代。

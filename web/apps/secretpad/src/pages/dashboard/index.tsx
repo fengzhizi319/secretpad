@@ -4,10 +4,50 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import { Card, Badge, Button } from '@secretpad/design-system';
 import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
+import { useState } from 'react';
+
+/** localStorage 中引导 banner 被关闭的标记键名。 */
+const GUIDE_BANNER_DISMISSED_KEY = 'secretpad-guide-banner-dismissed';
+/** 与引导页共用的进度键名（读取已完成步骤数，全部完成则不再展示 banner）。 */
+const GUIDE_PROGRESS_KEY = 'secretpad-guide-progress';
+
+/**
+ * 判断是否需要展示新手引导 banner。
+ *
+ * 规则：用户手动关闭过则不再弹出；引导步骤已全部完成也不再提示。
+ * 该函数在组件初始化时调用一次（useState 惰性初始值），避免每次渲染重复读 localStorage。
+ */
+function shouldShowGuideBanner(): boolean {
+  try {
+    if (localStorage.getItem(GUIDE_BANNER_DISMISSED_KEY) === '1') return false;
+    const raw = localStorage.getItem(GUIDE_PROGRESS_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      // 引导共 5 步（node/data/project/dag/result），全部完成则隐藏 banner。
+      if (Array.isArray(arr) && arr.length >= 5) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  // 新手引导 banner 是否可见（初始值惰性计算，仅读一次 localStorage）。
+  const [showGuideBanner, setShowGuideBanner] = useState<boolean>(() => shouldShowGuideBanner());
+
+  /** 关闭引导 banner 并持久化，之后不再自动弹出。 */
+  const dismissGuideBanner = () => {
+    try {
+      localStorage.setItem(GUIDE_BANNER_DISMISSED_KEY, '1');
+    } catch {
+      // 存储失败时仅在当前会话内隐藏。
+    }
+    setShowGuideBanner(false);
+  };
 
   const nodesQuery = useQuery({
     queryKey: ['nodes'],
@@ -60,6 +100,26 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* 新手引导 banner：首次使用或未完成任务时提示，点击跳转引导页。 */}
+      {showGuideBanner && (
+        <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-xl border border-blue-200 dark:border-blue-900 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/40 dark:to-purple-950/40">
+          <button
+            onClick={() => navigate({ to: '/guide' })}
+            className="flex items-center gap-2 text-xs font-medium text-blue-700 dark:text-blue-300 hover:underline underline-offset-2 text-left"
+          >
+            <span className="text-base">🚀</span>
+            {t('guide.dashboardBanner')}
+          </button>
+          <button
+            onClick={dismissGuideBanner}
+            aria-label="dismiss"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-sm flex-shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg px-4 py-2">
           {t('common.error', { message: error })}

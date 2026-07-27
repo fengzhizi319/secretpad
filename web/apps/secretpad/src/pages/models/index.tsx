@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Badge, Button, Modal, ConfirmDialog, toast } from '@secretpad/design-system';
-import type { ModelPackVO, GraphNodeDetail } from '@secretpad/api-client';
+import type { ModelPackVO, GraphNodeDetail, ModelPackDetailVO, ServingDetailVO } from '@secretpad/api-client';
 import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
@@ -29,6 +29,10 @@ export const ModelsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [detailModel, setDetailModel] = useState<ModelPackVO | null>(null);
   const [detailInfo, setDetailInfo] = useState<any>(null);
+  // 模型导出详情（各参与方的训练列，来自 model/detail）。
+  const [exportDetail, setExportDetail] = useState<ModelPackDetailVO | null>(null);
+  // 发布详情（服务端点/特征映射等，来自 model/serving/detail）。
+  const [servingDetail, setServingDetail] = useState<ServingDetailVO | null>(null);
 
   // Deploy modal
   const [deployOpen, setDeployOpen] = useState(false);
@@ -253,15 +257,46 @@ export const ModelsPage: React.FC = () => {
     onError: (e) => setError(e instanceof Error ? e.message : String(e)),
   });
 
+  /**
+   * 查看模型详情：同时拉取三类信息并聚合展示。
+   *
+   * 1. `model/info`：模型状态与概要（原有逻辑）；
+   * 2. `model/detail`：模型导出详情——各参与方及其训练列（parties/columns）；
+   * 3. `model/serving/detail`：发布详情——服务端点、特征映射、源路径（仅在已发布时）。
+   *
+   * 三个请求互相独立，任一失败不影响其他，失败时对应区块展示空态。
+   */
   const handleViewDetail = async (model: ModelPackVO) => {
     setDetailModel(model);
     setDetailInfo(null);
+    setExportDetail(null);
+    setServingDetail(null);
     if (!model.modelId || !selectedProjectId) return;
+
+    // 概要信息（原有）。
     try {
       const info = await apiClient.getModelInfo(model.modelId, selectedProjectId);
       setDetailInfo(info);
     } catch (e) {
       setDetailInfo({ error: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 模型导出详情（参与方与训练列）。
+    try {
+      const detail = await apiClient.getModelDetail(model.modelId, selectedProjectId);
+      setExportDetail(detail);
+    } catch {
+      setExportDetail(null);
+    }
+
+    // 发布详情（仅在模型已发布 servingId 时拉取）。
+    if (model.servingId) {
+      try {
+        const serving = await apiClient.getModelServingDetail(model.servingId);
+        setServingDetail(serving);
+      } catch {
+        setServingDetail(null);
+      }
     }
   };
 
@@ -475,31 +510,112 @@ export const ModelsPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Model Detail Modal */}
+      {/* Model Detail Modal：聚合概要 + 导出详情 + 发布详情。 */}
       <Modal
         isOpen={!!detailModel}
-        onClose={() => { setDetailModel(null); setDetailInfo(null); }}
+        onClose={() => { setDetailModel(null); setDetailInfo(null); setExportDetail(null); setServingDetail(null); }}
         title={detailModel?.modelName || t('models.detail')}
         footer={
-          <Button variant="primary" onClick={() => { setDetailModel(null); setDetailInfo(null); }}>{t('common.close')}</Button>
+          <Button variant="primary" onClick={() => { setDetailModel(null); setDetailInfo(null); setExportDetail(null); setServingDetail(null); }}>{t('common.close')}</Button>
         }
       >
-        <div className="text-xs space-y-2">
-          {detailInfo?.error ? (
-            <div className="text-red-500">{detailInfo.error}</div>
-          ) : !detailInfo ? (
-            <div className="text-gray-400">{t('common.loading')}</div>
-          ) : (
-            <>
-              <div><span className="font-semibold">{t('models.stats')}:</span> {detailInfo?.modelStats || '-'}</div>
-              <div><span className="font-semibold">{t('models.servingCount')}:</span> {detailInfo?.servingDetails?.length || 0}</div>
-              {detailInfo?.servingDetails?.map((s: any, idx: number) => (
-                <div key={idx} className="p-2 rounded bg-gray-50 dark:bg-gray-800 font-mono">
-                  {s.nodeName || s.nodeId}: {s.endpoints || '-'}
-                </div>
-              ))}
-            </>
-          )}
+        <div className="text-xs space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+          {/* 概要信息 */}
+          <div className="space-y-2">
+            {detailInfo?.error ? (
+              <div className="text-red-500">{detailInfo.error}</div>
+            ) : !detailInfo ? (
+              <div className="text-gray-400">{t('common.loading')}</div>
+            ) : (
+              <>
+                <div><span className="font-semibold">{t('models.stats')}:</span> {detailInfo?.modelStats || '-'}</div>
+                <div><span className="font-semibold">{t('models.servingCount')}:</span> {detailInfo?.servingDetails?.length || 0}</div>
+              </>
+            )}
+          </div>
+
+          {/* 模型导出详情：各参与方及其训练列。 */}
+          <div>
+            <div className="text-gray-500 text-[10px] font-semibold uppercase tracking-wide mb-1.5">
+              {t('models.exportDetail')}
+            </div>
+            {exportDetail && (exportDetail.parties?.length ?? 0) > 0 ? (
+              <div className="space-y-2">
+                {(exportDetail.parties ?? []).map((party, idx) => (
+                  <div key={idx} className="p-2.5 rounded bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                    <div className="font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                      {party.nodeName || party.nodeId || '-'}
+                      <span className="ml-2 font-mono text-[10px] text-gray-400">{party.nodeId}</span>
+                    </div>
+                    <div className="text-[10px] text-gray-500 mb-1">{t('models.exportColumns')}:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(party.columns ?? []).length === 0 && <span className="text-gray-400">-</span>}
+                      {(party.columns ?? []).map((col) => (
+                        <span key={col} className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-mono text-[10px]">
+                          {col}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-gray-400">{t('models.exportNoParties')}</div>
+            )}
+          </div>
+
+          {/* 发布详情：服务端点 / 特征映射 / 源路径。 */}
+          <div>
+            <div className="text-gray-500 text-[10px] font-semibold uppercase tracking-wide mb-1.5">
+              {t('models.servingDetail')}
+            </div>
+            {servingDetail && (servingDetail.servingDetails?.length ?? 0) > 0 ? (
+              <div className="space-y-2">
+                {servingDetail.servingId && (
+                  <div className="font-mono text-[10px] text-gray-500">
+                    {t('models.servingId')}: {servingDetail.servingId}
+                  </div>
+                )}
+                {(servingDetail.servingDetails ?? []).map((sd, idx) => (
+                  <div key={idx} className="p-2.5 rounded bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 space-y-1">
+                    <div className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                      {sd.nodeName || sd.nodeId || '-'}
+                      {sd.isMock && <Badge status="default"><span className="text-[9px]">{t('models.servingMock')}</span></Badge>}
+                    </div>
+                    {sd.endpoints && (
+                      <div className="font-mono text-[10px] text-gray-600 dark:text-gray-400">
+                        <span className="text-gray-400">{t('models.servingEndpoints')}: </span>{sd.endpoints}
+                      </div>
+                    )}
+                    {sd.featureHttp && (
+                      <div className="font-mono text-[10px] text-gray-600 dark:text-gray-400">
+                        <span className="text-gray-400">{t('models.servingFeatureHttp')}: </span>{sd.featureHttp}
+                      </div>
+                    )}
+                    {sd.sourcePath && (
+                      <div className="font-mono text-[10px] text-gray-600 dark:text-gray-400 break-all">
+                        <span className="text-gray-400">{t('models.servingSourcePath')}: </span>{sd.sourcePath}
+                      </div>
+                    )}
+                    {sd.featureMappings && Object.keys(sd.featureMappings).length > 0 && (
+                      <div>
+                        <div className="text-[10px] text-gray-400 mb-0.5">{t('models.servingFeatureMappings')}:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(sd.featureMappings).map(([k, v]) => (
+                            <span key={k} className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-mono text-[10px]">
+                              {k} → {v}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-gray-400">{t('models.servingNoDetail')}</div>
+            )}
+          </div>
         </div>
       </Modal>
 

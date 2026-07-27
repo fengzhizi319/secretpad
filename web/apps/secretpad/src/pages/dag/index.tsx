@@ -139,6 +139,30 @@ export const DAGPage: React.FC = () => {
       nodeOutput: t('dag.output'),
       deleteNode: t('common.delete'),
       emptyCanvas: t('dag.emptyCanvas'),
+      // 高级配置抽屉文案（传递给 dag-next 的 AttributeForm）
+      advancedConfig: t('dag.advancedConfig'),
+      noAttrs: t('dag.noAttrs'),
+      optional: t('dag.optionalAttr'),
+      required: t('dag.requiredAttr'),
+      none: t('dag.noneSelection'),
+      listPlaceholder: t('dag.listPlaceholder'),
+      // 组件解释器文案（传递给 dag-next 的 ComponentInterpreter）
+      interpreterTitle: t('dag.interpreterTitle'),
+      interpreterDesc: t('dag.interpreterDesc'),
+      interpreterInputs: t('dag.interpreterInputs'),
+      interpreterOutputs: t('dag.interpreterOutputs'),
+      interpreterAttrs: t('dag.interpreterAttrs'),
+      interpreterLoading: t('dag.interpreterLoading'),
+      interpreterNoDef: t('dag.interpreterNoDef'),
+      interpreterTypes: t('dag.interpreterTypes'),
+      interpretComponent: t('dag.interpretComponent'),
+      // 日志查看器文案（传递给 dag-next 的 LogViewer）
+      logSearchPlaceholder: t('dag.logSearchPlaceholder'),
+      logCopy: t('dag.logCopy'),
+      logCopied: t('dag.logCopied'),
+      logWrap: t('dag.logWrap'),
+      logAutoScroll: t('dag.logAutoScroll'),
+      logLines: t('dag.logLines'),
     }),
     [t]
   );
@@ -357,10 +381,24 @@ export const DAGPage: React.FC = () => {
       const defs = await apiClient.batchGetComponent([{ domain, name }]);
       const def = (defs[node.codeName] || Object.values(defs)[0]) ?? null;
       if (!def) return null;
+      // 映射为画布可用的组件元数据：
+      // - inputs/outputs 携带名称、描述与允许的数据类型（供组件解释器展示）；
+      // - attrs 保留原始 AttributeDef 结构（供高级配置表单解析）。
+      const defAny = def as Record<string, any>;
       return {
         desc: def.desc,
-        inputs: (def.inputs || []).map((item) => ({ name: (item as { name?: string }).name })),
-        outputs: (def.outputs || []).map((item) => ({ name: (item as { name?: string }).name })),
+        version: defAny.version,
+        domain: defAny.domain ?? domain,
+        inputs: (def.inputs || []).map((item: any) => ({
+          name: item?.name,
+          desc: item?.desc,
+          types: Array.isArray(item?.types) ? item.types : undefined,
+        })),
+        outputs: (def.outputs || []).map((item: any) => ({
+          name: item?.name,
+          desc: item?.desc,
+          types: Array.isArray(item?.types) ? item.types : undefined,
+        })),
         attrs: def.attrs as Array<Record<string, unknown>> | undefined,
       };
     } catch {
