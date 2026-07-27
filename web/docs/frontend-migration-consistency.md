@@ -281,11 +281,22 @@ corepack pnpm exec playwright test
 - 补充 `i18n/dictionaries.ts`：`dag.createPeriodicTask`、`dag.periodicTaskOnceSuccessHint`、`dag.periodicTaskNodes`、`dag.periodicTaskSelectAll`、`dag.periodicTaskDeselectAll` 等中英键值。
 - 验证：`corepack pnpm --filter @secretpad/app typecheck` 与 `corepack pnpm run lint` 通过（0 errors）。
 
+### 7.16 数据上传入口（P1 Phase 10）
+
+- 新增 `features/data-upload/data-upload-modal.tsx`：
+  - 选择目标 Kuscia 节点（默认当前数据表页面选中的节点）。
+  - 选择本地文件，展示文件大小。
+  - 调用 `apiClient.uploadData`（`POST /api/v1alpha1/data/upload?Node-Id=...`）上传文件。
+  - 上传成功后展示返回的数据源名称、真实文件名、数据源、数据源类型。
+- 在 `pages/data-tables/index.tsx` 工具栏增加“上传数据文件”按钮。
+- 补充 `i18n/dictionaries.ts`：`dataUpload.*` 命名空间（中英双语）。
+- 验证：`corepack pnpm --filter @secretpad/app typecheck` 与 `corepack pnpm run lint` 通过（0 errors）。
+
 ### 7.15 迁移完成度总结（更新）
 
 - P0 功能（DAG 模板库、结果管理独立页、DAG 模型提交入口、DAG 周期任务入口）已全部完成。
 - 旧前端核心日常流程（项目 / 节点 / 数据表 / 数据源 / 模型 / 消息 / 周期任务 / DAG 编排与运行 / 结果查看）均已在新前端实现并接入真实接口。
-- 剩余 P1/P2 功能（DAG 高级配置、组件解释器、新用户引导、数据上传、工作台聚合页、隐私场景展示页、模型导出/发布、云日志 SLS、组件版本等）不阻塞主业务闭环，可后续按需迁移。
+- 剩余 P1/P2 功能（DAG 高级配置、组件解释器、新用户引导、工作台聚合页、隐私场景展示页、模型导出/发布、云日志 SLS、组件版本等）不阻塞主业务闭环，可后续按需迁移。
 
 ### 8.1 对比维度说明
 
@@ -466,9 +477,10 @@ corepack pnpm exec playwright test
    - 旧模块：`guide`、`guide-pipeline`、`guide-node`。
    - 建议：首次登录无项目/节点时弹出的引导页，或分步 tour。
 
-8. **数据上传页面**（`pages/data-upload` 或集成到 `data-tables`）
+8. **数据上传入口**（`pages/data-tables`）✅ 已完成
    - 旧接口：`DataController.upload`/`download`/`sync`。
-   - 建议：在数据表页面增加“本地上传”入口，支持 CSV/文件选择。
+   - 新前端：`features/data-upload/data-upload-modal.tsx`。
+   - 实现：在数据表页面工具栏增加“上传数据文件”按钮；选择节点与本地文件后调用 `apiClient.uploadData`；上传成功后展示数据源名称、真实文件名、数据源类型。
 
 9. **EDGE / P2P 工作台聚合页**（`pages/edge`、`pages/workbench`）
    - 旧模块：`edge`、`p2p-workbench`。
