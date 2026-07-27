@@ -181,4 +181,18 @@ corepack pnpm exec playwright test
 - 补充 `shared/lib/i18n/dictionaries.ts` 中 Projects 相关文案，覆盖中英双语。
 - 验证：类型检查与 lint 通过，无新增错误。
 
+### 7.7 DataTables 页面增强（2026-07-27 后续）
+
+- 重写 `pages/data-tables/index.tsx`：
+  - 保留节点过滤、数据表列表、导入、删除、推送到 TEE。
+  - 新增数据表“详情”抽屉，包含三个标签页：
+    - **Schema 预览**：展示数据源、节点、URI、状态及完整字段（类型、描述、敏感分级）。
+    - **授权项目**：展示已授权项目列表，支持新增授权（选择项目 + 关联键 + 标签列）与取消授权。
+      新增授权调用 `project/datatable/add`，取消授权调用 `project/datatable/delete`。
+    - **授权血缘**：以树状结构展示“数据表 → 已授权项目”的血缘关系。
+  - 刷新状态按钮调用 `datatable/get` 重新拉取详情与状态。
+- 扩展 `apiClient.addProjectDatatable` 的 `configs` 类型为 `TableColumnConfigParam[]`，支持透传 `isAssociateKey` / `isLabelKey` / `isProtection`。
+- 补充中英双语字典 `dataTables.*` 与 `projects.selectProject`。
+- 验证：类型检查与 lint 通过，无新增错误。
+
 

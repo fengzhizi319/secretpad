@@ -749,7 +749,7 @@ export const apiClient = {
     projectId: string;
     nodeId: string;
     datatableId: string;
-    configs?: { colName?: string; colType?: string; classification?: string }[];
+    configs?: components['schemas']['TableColumnConfigParam'][];
     teeNodeId?: string;
     datasourceId?: string;
     type?: string;
