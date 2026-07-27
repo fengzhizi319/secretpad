@@ -46,6 +46,7 @@ import type {
   DatasourceNodesVO,
   UploadDataResultVO,
   SyncDataDTO,
+  PullStatusVO,
 } from './schemas';
 import {
   ProjectVOSchema,
@@ -66,6 +67,7 @@ import {
   DatasourceNodesVOSchema,
   UploadDataResultVOSchema,
   SyncDataDTOSchema,
+  PullStatusVOSchema,
   NodeSchema,
   pageResponseSchema,
 } from './schemas';
@@ -1478,12 +1480,12 @@ export const apiClient = {
     taskID: string;
     resourceID: string;
     resourceType?: string;
-  }): Promise<unknown> {
+  }): Promise<PullStatusVO> {
     const { data, error } = await api.POST('/api/v1alpha1/approval/pull/status', {
       body: input as components['schemas']['PullStatusRequest'],
     });
     if (error) throw new Error(apiError(error));
-    return unwrap(data as unknown as SecretPadResponse<unknown>);
+    return unwrapValidated(PullStatusVOSchema, data, 'approval/pull/status');
   },
 
   // ============================ feature datasource ============================

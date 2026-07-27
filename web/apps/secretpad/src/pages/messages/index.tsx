@@ -5,6 +5,8 @@ import type { User, MessageVO } from '@secretpad/api-client';
 import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { useAuthStore } from '../../features/auth/model/auth-store';
+import { CreateApprovalModal } from '../../features/approval/create-approval-modal';
+import { ApprovalStatusPoller } from '../../features/approval/approval-status-poller';
 
 const PENDING_STATUSES = ['PENDING', 'WAITING', 'REVIEWING'];
 
@@ -18,6 +20,8 @@ export const MessagesPage: React.FC = () => {
   const [replyTarget, setReplyTarget] = useState<MessageVO | null>(null);
   const [replyReason, setReplyReason] = useState('');
   const [detailTarget, setDetailTarget] = useState<MessageVO | null>(null);
+  // 审批主动创建 Modal 的开关状态。
+  const [createOpen, setCreateOpen] = useState(false);
 
   const messagesQuery = useQuery({
     queryKey: ['messages', ownerId],
@@ -105,9 +109,13 @@ export const MessagesPage: React.FC = () => {
           <Badge status={pendingCount > 0 ? 'warning' : 'success'}>
             {t('messages.pendingCount', { count: pendingCount })}
           </Badge>
+          <Button size="sm" variant="primary" onClick={() => setCreateOpen(true)}>{t('approval.create')}</Button>
           <Button size="sm" variant="outline" onClick={handleRefresh}>{t('common.refresh')}</Button>
         </div>
       </div>
+
+      {/* 审批状态轮询：填写资源定位字段后按间隔轮询各参与方投票状态 */}
+      <ApprovalStatusPoller />
 
       {error && (
         <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg px-4 py-2">
@@ -184,6 +192,14 @@ export const MessagesPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Create Approval Modal */}
+      <CreateApprovalModal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        defaultInitiatorId={ownerId}
+        onCreated={invalidateMessages}
+      />
 
       {/* Detail Modal */}
       <Modal

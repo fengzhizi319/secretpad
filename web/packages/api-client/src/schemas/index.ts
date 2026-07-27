@@ -591,6 +591,36 @@ export const ProjectParticipantsDetailVOSchema = z.object({
 });
 export type ProjectParticipantsDetailVO = z.infer<typeof ProjectParticipantsDetailVOSchema>;
 
+/** 单个投票信息（某参与方的一次投票动作）。 */
+export const VoteInfoSchema = z.object({
+  voteID: z.string().optional(),
+  nodeID: z.string().optional(),
+  action: z.string().optional(),
+  reason: z.string().optional(),
+});
+export type VoteInfo = z.infer<typeof VoteInfoSchema>;
+
+/** 审批参与方（节点维度的投票状态与明细）。 */
+export const ParticipantSchema = z.object({
+  nodeID: z.string().optional(),
+  nodeName: z.string().optional(),
+  status: z.string().optional(),
+  voteInfos: z.array(VoteInfoSchema).optional(),
+});
+export type Participant = z.infer<typeof ParticipantSchema>;
+
+/** 审批状态轮询结果（`approval/pull/status` 返回值）。 */
+export const PullStatusVOSchema = z.object({
+  projectID: z.string().optional(),
+  jobID: z.string().optional(),
+  taskID: z.string().optional(),
+  graphID: z.string().optional(),
+  resourceID: z.string().optional(),
+  resourceType: z.string().optional(),
+  parties: z.array(ParticipantSchema).optional(),
+});
+export type PullStatusVO = z.infer<typeof PullStatusVOSchema>;
+
 // User context DTO (from /api/v1alpha1/user/get)
 export const UserContextDTOSchema = z.object({
   token: z.string().optional(),
@@ -636,6 +666,12 @@ export const AuthProjectVOSchema = z.object({
   name: z.string().optional(),
   computeMode: z.string().optional(),
   gmtCreate: z.string().optional(),
+  // 关联键列表（授权时指定的 associate key）。
+  associateKeys: z.array(z.string()).optional(),
+  // 标签列列表（授权时指定的 label key）。
+  labelKeys: z.array(z.string()).optional(),
+  // 分组键列表（授权时指定的 group key）。
+  groupKeys: z.array(z.string()).optional(),
 });
 export type AuthProjectVO = z.infer<typeof AuthProjectVOSchema>;
 

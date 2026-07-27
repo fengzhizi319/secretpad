@@ -47,7 +47,7 @@
 | P2P 项目列表 / 创建 / 编辑 / 归档 / 参与方 | P2P Projects | `pages/p2p/projects` | `p2p/project/list`, `p2p/project/create`, `p2p/project/update`, `p2p/project/archive`, `p2p/project/participants` | ✅ |
 | 用户信息 / 修改密码 | Account | `pages/account` | `user/get`, `user/updatePwd` | ✅ |
 | 数据源详情 / 节点 | DataSources | `pages/data-sources/detail` | `datasource/detail`, `datasource/nodes` | ✅ |
-| 审批创建 / 状态轮询 | Approval | `packages/api-client` | `approval/create`, `approval/status` | ✅ |
+| 审批创建 / 状态轮询 | Approval | `pages/messages` + `features/approval` | `approval/create`, `approval/pull/status` | ✅ |
 | 项目任务日志 / 输出 | Projects / DAG | `packages/api-client` | `project/job/task/logs`, `project/job/task/output` | ✅ |
 | 项目 TEE 节点 / 输出表 / 表配置 / 数据源 / 机构 | Projects | `packages/api-client` | `project/tee/list`, `project/getOutTable`, `project/update/tableConfig`, `project/datasource/list`, `project/inst/add` | ✅ |
 | 周期任务一次成功 / 作业列表 / 任务详情 | Periodic Tasks | `packages/api-client` | `scheduled/graph/once/success`, `scheduled/job/list`, `scheduled/task/info` | ✅ |
@@ -391,6 +391,27 @@ corepack pnpm exec playwright test
 - 补充 `i18n/dictionaries.ts`：`versions.*` 与 `sidebar.componentVersions` 命名空间（中英双语）。
 - 验证：typecheck 与 lint 通过（0 errors）。
 
+### 7.27 数据表树形血缘可视化（P2）
+
+- 新增 `features/lineage/lineage-tree.tsx`（`LineageTree` / `LineageNode` / `NodeCard` / `TreeBranch`）：
+  - 对应旧前端 `data-table-tree` 模块。零依赖纯 CSS（flex + 绝对定位连接线）绘制横向树，适配离线部署。
+  - `LineageNode` 描述树节点（icon / title / subtitle / badge / badgeTone / details / children）；`TreeBranch` 递归渲染「父节点 — 水平短线 — 子节点列」，子节点列用上半段/下半段拼接出只 spanning 首子中心~末子中心的竖直主干。
+- 集成到 `pages/data-tables/index.tsx` 详情血缘 Tab：`lineageRoot` useMemo 构建三层树「数据源 → 数据表（含 URI/状态/列数）→ 已授权项目（含关联键/标签列/授权时间）」，数据来自 `detailVO`（`DatatableVO`）与 `authProjects`。
+- 为 `AuthProjectVOSchema` 补充 `associateKeys` / `labelKeys` / `groupKeys`（`string[]` optional），与生成的 `secretpad.d.ts` 对齐。
+- 补充 `i18n/dictionaries.ts`：`dataTables.lineage*` 命名空间（中英双语）。
+
+### 7.28 审批主动创建 UI + 状态轮询（P2）
+
+- 新增 `features/approval/create-approval-modal.tsx`（`CreateApprovalModal`）：
+  - 对应后端 `POST /api/v1alpha1/approval/create`（`ApprovalController#createApproval`）。
+  - 按 `voteType`（NODE_ROUTE / TEE_DOWNLOAD / PROJECT_CREATE / PROJECT_ARCHIVE）声明式渲染对应 `voteConfig` 字段（键名严格对齐后端各 VoteConfig 子类属性名），提交时组装对象；列表字段（participants）按逗号拆分为数组；发起方 ID 默认取当前登录用户 `ownerId`。
+- 新增 `features/approval/approval-status-poller.tsx`（`ApprovalStatusPoller`）：
+  - 对应后端 `POST /api/v1alpha1/approval/pull/status`（`ApprovalController#pullStatus`）。
+  - 填写资源定位字段（projectID / jobID / taskID / resourceID 必填 + resourceType 下拉 model/rule/table）后开启轮询，`useQuery` 以 3s `refetchInterval` 重复请求，展示各参与方（节点维度）投票状态 Badge 与逐次投票明细。
+- 为 `packages/api-client` 新增 `VoteInfoSchema` / `ParticipantSchema` / `PullStatusVOSchema`，并将 `pullApprovalStatus` 返回类型由 `unknown` 收紧为 `PullStatusVO`（`unwrapValidated` 运行时校验）。
+- 集成到 `pages/messages/index.tsx`：头部新增「发起审批」按钮打开创建 Modal；头部下方嵌入 `ApprovalStatusPoller` 轮询卡片。
+- 补充 `i18n/dictionaries.ts`：`approval.*` 命名空间（中英双语）。
+
 ### 7.15 迁移完成度总结（更新）
 
 - P0 功能（DAG 模板库、结果管理独立页、DAG 模型提交入口、DAG 周期任务入口）已全部完成。
@@ -398,7 +419,7 @@ corepack pnpm exec playwright test
 - **本轮（2026-07-26）已完成全部 P1 与 P2 迁移项**（见 7.18–7.26）：
   - P1：DAG 高级配置抽屉（`attribute-form`）、DAG 组件解释器/组件树增强（`component-interpreter`）、新用户引导页（`pages/guide`）、EDGE/P2P 工作台聚合页（`pages/workbench`）、DAG 日志 Monaco 查看器（`log-viewer`）。
   - P2：模型导出/发布详情（`pages/models` 详情弹窗）、云端日志 SLS（`pages/cloud-logs`）、特征数据源/投票同步（`pages/feature-datasource`）、组件版本管理（`pages/component-versions`）。
-- 至此，迁移优先级表（P0/P1/P2）中列出的 9 个功能已全部迁移完成；仅剩少量体验增强项（数据表树形血缘可视化、审批主动创建 UI、Graph 占位页等）可按需迁移，不阻塞主业务闭环。
+- 至此，迁移优先级表（P0/P1/P2）中列出的 9 个功能已全部迁移完成；**本轮（2026-07-27）进一步补齐数据表树形血缘可视化（7.27）与审批主动创建 UI + 状态轮询（7.28）**。仅剩 Graph 占位页等非核心体验项可按需迁移，不阻塞主业务闭环。
 
 ### 8.1 对比维度说明
 
@@ -522,7 +543,7 @@ corepack pnpm exec playwright test
 | P2P 我的节点 | `my-node` | `pages/p2p/my-node` | ✅ 已迁移 | 节点路由注册。 |
 | 数据源管理 | `all-data-sources`, `data-source-list` | `pages/data-sources` | ✅ 已迁移 | 含详情页。 |
 | 数据表管理 | `all-data-tables`, `data-manager`, `data-table-add`, `data-table-info`, `data-table-auth` | `pages/data-tables` | ✅ 已迁移 | 含 schema、授权、Push TEE、L1–L5 分类。 |
-| 数据表树 / 血缘 | `data-table-tree` | 无独立页面 | ⚠️ 部分迁移 | 数据表详情内有“授权链路”，但缺少完整的树形血缘视图。 |
+| 数据表树 / 血缘 | `data-table-tree` | `features/lineage` + `pages/data-tables` 详情 | ✅ 已迁移 | 数据表详情血缘 Tab 以树形可视化展示「数据源 → 数据表 → 已授权项目」（见 7.27）。 |
 | 模型管理 / 打包 / 部署 / 废弃 | `model-manager`, `dag-model-submission` | `pages/models` + DAG 工具栏 | ✅ 已迁移 | 模型列表、打包、部署、从 DAG 训练节点直接打包均已迁移。 |
 | 消息中心 | `message-center` | `pages/messages` | ✅ 已迁移 | 审批/回复、详情、未读角标。 |
 | 周期任务 | `periodic-task` | `pages/periodic-tasks` | ✅ 已迁移 | 创建、下线、删除、运行记录。 |
@@ -545,7 +566,7 @@ corepack pnpm exec playwright test
 | 模型导出 / 模型发布详情 | `ModelExportController`, `model-manager/model-release` | `pages/models` 详情弹窗 | ✅ 已迁移 | 基于 `model/detail`（parties/columns）与 `model/serving/detail`（endpoints/featureMappings）展示导出/发布详情。 |
 | 云端日志 SLS | `CloudLogController` | `pages/cloud-logs` | ✅ 已迁移 | 新增 `/cloud-logs` 页面对接 `cloud_log/sls`，复用 `LogViewer` 展示。 |
 | 特征数据源 / 投票同步 | `FeatureDatasourceController`, `VoteSyncController` | `pages/feature-datasource` | ✅ 已迁移 | 新增 `/feature-datasource` 双 Tab 页面：特征表查询/创建 + 投票同步（`VoteSyncTypeEnum`）。 |
-| 审批创建 / 状态轮询 | `ApprovalController` | `packages/api-client` | ⚠️ 部分迁移 | 消息中心可回复审批；主动创建审批、状态轮询 UI 未实现。 |
+| 审批创建 / 状态轮询 | `ApprovalController` | `features/approval` + `pages/messages` | ✅ 已迁移 | 消息中心可回复审批；新增主动创建审批 Modal 与状态轮询卡片（见 7.28）。 |
 | 组件版本管理 | `ComponentVersionController` | `pages/component-versions` | ✅ 已迁移 | 新增 `/component-versions` 页面，展示 9 个核心组件镜像版本卡片。 |
 
 ### 8.5 未迁移功能详细清单与优先级建议
@@ -622,14 +643,14 @@ corepack pnpm exec playwright test
     - 对接 `ComponentVersionController`。
     - 新前端：`pages/component-versions/index.tsx`。展示 9 个核心组件镜像版本卡片，自动提取 tag 高亮，支持刷新。
 
-16. **数据表树形血缘视图**（`data-table-tree`）
-    - 在数据表详情现有“授权链路”基础上扩展为树/图可视化。
+16. **数据表树形血缘视图**（`data-table-tree`） ✅ 已完成
+    - 在数据表详情血缘 Tab 以树形可视化展示「数据源 → 数据表 → 已授权项目」（见 7.27）。
 
 ### 8.6 迁移建议
 
 1. **优先 P0**：DAG 模板、结果管理、模型提交、周期任务入口是当前用户在 DAG 上跑通完整业务闭环的最大缺口。补齐后，旧前端 90% 以上的核心操作可由新前端独立完成。（✅ 已完成）
 2. **补齐 P1 体验项**：高级配置、组件解释器、引导页、数据上传、工作台聚合页、日志查看器完成后，新前端在生产可用性上基本追平旧前端。（✅ 已完成）
-3. **P2 按需**：隐私场景、模型导出/发布、云日志、特征数据源/投票同步、组件版本等已按业务需求迁移完成；后续仅剩数据表血缘可视化等体验增强项。（✅ 已完成）
+3. **P2 按需**：隐私场景、模型导出/发布、云日志、特征数据源/投票同步、组件版本、数据表血缘可视化、审批主动创建 UI 等均已按业务需求迁移完成。（✅ 已完成）
 4. **平台模式适配**：EDGE / P2P 工作台聚合页已复用现有独立页面，通过新增 `/workbench` 首页组件组合呈现，避免重复开发。（✅ 已完成）
 5. **保持一致性**：所有新增页面继续沿用 `TanStack Router`、`TanStack Query`、`Zustand`、`@secretpad/design-system`、i18n 字典的现有模式；新增 DAG 模板继续按 `pipeline-template-*.ts` 的纯函数方式生成 graph 定义，便于测试与维护。
 
@@ -638,5 +659,5 @@ corepack pnpm exec playwright test
 - 新前端已覆盖旧前端 **登录、Dashboard、项目、节点、数据源、数据表、模型管理、消息、周期任务、账户、机构、P2P 项目/节点** 等核心 CRUD 能力。
 - **DAG 模板库、结果管理独立页、DAG 模型提交入口、DAG 周期任务入口** 等剩余 P0 功能已全部补齐。
 - **本轮（2026-07-26）已完成全部 P1 与 P2 迁移项**：DAG 高级配置抽屉、组件解释器/组件树增强、新用户引导页、EDGE/P2P 工作台聚合页、DAG 日志 Monaco 查看器、模型导出/发布详情、云端日志 SLS、特征数据源/投票同步、组件版本管理（见 7.18–7.26）。
-- 至此，迁移优先级表（P0/P1/P2）中列出的 9 个功能已全部迁移完成；旧前端核心日常流程与体验增强项均已可由新前端承载。仅剩 **数据表树形血缘可视化、审批主动创建 UI、Graph 占位页** 等少量体验增强项可按需迁移，不阻塞主业务闭环。
+- 至此，迁移优先级表（P0/P1/P2）中列出的 9 个功能已全部迁移完成；旧前端核心日常流程与体验增强项均已可由新前端承载。**本轮（2026-07-27）补齐数据表树形血缘可视化（7.27）与审批主动创建 UI + 状态轮询（7.28）**；仅剩 **Graph 占位页** 等非核心体验项可按需迁移，不阻塞主业务闭环。
 - 旧前端中部分能力（如 `pages/graphs.tsx` 占位页、部分已弃用的 CENTER 工作台）可不再迁移，直接以新前端的独立路由方式替代。

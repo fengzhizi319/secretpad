@@ -7,6 +7,8 @@ import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
 import { DataUploadModal } from '../../features/data-upload';
+import { LineageTree } from '../../features/lineage/lineage-tree';
+import type { LineageNode } from '../../features/lineage/lineage-tree';
 
 function parseSchemaText(text: string): { name: string; type: string }[] {
   return text
@@ -128,6 +130,58 @@ export const DataTablesPage: React.FC = () => {
     const authorizedIds = new Set((detailVO?.authProjects ?? []).map((a) => a.projectId));
     return data.filter((p) => p.projectId && !authorizedIds.has(p.projectId));
   }, [projectsQuery.data, detailVO?.authProjects]);
+
+  /**
+   * 授权血缘树数据：数据源 → 数据表 → 已授权项目。
+   *
+   * - 根节点为数据源（名称 + 类型徽标）；
+   * - 二级节点为数据表（名称 + 字段数 + URI / 状态明细）；
+   * - 三级节点为已授权项目（项目名 + 计算模式徽标 + 关联键/标签列/授权时间明细）。
+   * 供 `LineageTree` 组件以树形图可视化渲染。
+   */
+  const lineageRoot = useMemo<LineageNode | null>(() => {
+    if (!detailTable) return null;
+    const authProjects = detailVO?.authProjects ?? [];
+    return {
+      id: 'datasource',
+      icon: '🗄️',
+      title: detailVO?.datasourceName || t('dataTables.lineageDatasource'),
+      subtitle: detailVO?.datasourceId,
+      badge: detailVO?.datasourceType,
+      badgeTone: 'purple',
+      children: [
+        {
+          id: 'table',
+          icon: '📋',
+          title: detailVO?.datatableName || detailTable.tableName,
+          subtitle: detailVO?.datatableId || detailTable.tableId,
+          badge: `${detailVO?.schema?.length ?? 0} ${t('dataTables.lineageColumns')}`,
+          badgeTone: 'blue',
+          details: [
+            ...(detailVO?.relativeUri ? [{ label: 'URI', value: detailVO.relativeUri }] : []),
+            ...(detailVO?.status ? [{ label: t('dataTables.lineageStatus'), value: detailVO.status }] : []),
+          ],
+          children: authProjects.map((auth, idx) => ({
+            id: `project-${auth.projectId}-${idx}`,
+            icon: '📁',
+            title: auth.name || auth.projectId || '-',
+            subtitle: auth.projectId,
+            badge: auth.computeMode,
+            badgeTone: 'green' as const,
+            details: [
+              ...(auth.associateKeys?.length
+                ? [{ label: t('dataTables.lineageAssocKeys'), value: auth.associateKeys.join(', ') }]
+                : []),
+              ...(auth.labelKeys?.length
+                ? [{ label: t('dataTables.lineageLabelKeys'), value: auth.labelKeys.join(', ') }]
+                : []),
+              ...(auth.gmtCreate ? [{ label: t('dataTables.lineageAuthTime'), value: auth.gmtCreate }] : []),
+            ],
+          })),
+        },
+      ],
+    };
+  }, [detailTable, detailVO, t]);
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -678,32 +732,11 @@ export const DataTablesPage: React.FC = () => {
             {detailTab === 'lineage' && (
               <div className="space-y-4">
                 <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{t('dataTables.lineageTitle')}</h4>
-                {(detailVO?.authProjects || []).length === 0 && (
+                {/* 树形血缘图：数据源 → 数据表 → 已授权项目；未加载完成时展示空态。 */}
+                {lineageRoot ? (
+                  <LineageTree root={lineageRoot} />
+                ) : (
                   <div className="text-xs text-gray-400 text-center py-6">{t('dataTables.noLineage')}</div>
-                )}
-                {(detailVO?.authProjects || []).length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">{detailTable.tableName}</span>
-                      <span className="text-xs text-gray-400 font-mono">{detailTable.tableId}</span>
-                    </div>
-                    <div className="ml-1.5 border-l-2 border-blue-200 dark:border-blue-900 pl-4 space-y-3">
-                      {(detailVO?.authProjects || []).map((auth, idx) => (
-                        <div key={`${auth.projectId}-${idx}`} className="p-3 rounded-lg border border-gray-200 dark:border-gray-800 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-800 dark:text-gray-200">{auth.name || auth.projectId}</span>
-                            {auth.computeMode && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
-                                {auth.computeMode}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-gray-400 mt-0.5 font-mono">{auth.projectId}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 )}
               </div>
             )}
