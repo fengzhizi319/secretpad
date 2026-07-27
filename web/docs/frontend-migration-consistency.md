@@ -215,18 +215,20 @@ corepack pnpm exec playwright test
   - **结果可视化**：输出面板识别 `type === 'table'` 且 `meta.rows` 为数组时，以 HTML 表格形式展示数据；支持 `tabs` 分栏展示；其余类型仍使用 JSON 高亮。
 - 在 `pages/dag/index.tsx` 中实现 `handleGetComponentDef`：按 `codeName` 解析 domain/name，调用 `apiClient.batchGetComponent` 并映射为 `ComponentMetadata`。
 - 类型检查与 lint 通过，无新增错误。
-- 待完成：PSI / LR 模板向导，从旧前端 `pipeline-template-psi.ts` / `pipeline-template-sanitization.ts` 迁移。
+- 待完成：结果管理独立页、DAG 模型提交、DAG 周期任务入口（Phase 7~9）。
 
-### 7.10 DAG PSI 模板向导（Phase 4.2）
+### 7.10 DAG 模板库（Phase 6）
 
-- 在 `pages/dag/index.tsx` 增加“PSI 模板”按钮与向导弹窗：
-  - 选择接收方节点、数据表、关联键；选择发送方节点、数据表、关联键。
-  - 向导内部调用 `graph/create` 创建空图，再调用 `graph/update` 写入两个 `read_data/datatable` 节点与 `data_prep/psi` 节点及两条边。
-  - `read_data` 节点使用 `datatable_selected` 属性 `{ s: tableId, is_na: false }`。
-  - `psi` 节点属性严格按旧前端 `pipeline-template-psi.ts` 顺序构造：`input/input_ds1/keys`、`input/input_ds2/keys`、`protocol`（`PROTOCOL_RR22`）、`sort_result`（true）、`receiver_parties`（双方 nodeId）、`allow_empty_result`（na）、`join_type`（`inner_join`）、`input_ds1_keys_duplicated`（true）、`input_ds2_keys_duplicated`（true）。
-  - 关联键使用 `ss: [key]` 字符串数组形式。
-- 补充 `shared/lib/i18n/dictionaries.ts` 中 `dag.*` 模板向导相关中英文字典。
-- 验证：类型检查与 lint 通过，无新增错误。
+- 在 `features/dag-templates/` 下建立可扩展的模板贡献系统：
+  - `types.ts`：定义 `TemplateMetadata`、`TemplateBuildInput`、`TemplateBuildResult`、`TemplateContribution` 及各类模板配置类型（双表/单表/K-匿名/L-多样性/本地差分隐私/脱敏/Risk/TEE）。
+  - `builder.ts`：提供 `nodeId` / `edgeId` / `connect` / `createNode` / `createReadDataNode` / `createPsiNode` / `buildSingleTablePrivacyTemplate` / 属性辅助函数（`sAttr` / `ssAttr` / `i64Attr` / `fAttr` / `bAttr` / `jsonAttr` / `naAttr`），统一封装旧前端中重复的 nodeDef/edges 构建逻辑。
+  - `templates/`：逐个迁移旧前端 `pipeline-template-*.ts` 为纯函数模板实现：blank、psi、data-classification、sanitization、query-obfuscation、k-anonymity、l-diversity、local-differential-privacy、differential-privacy、risk、tee。
+  - `registry.ts`：集中注册所有模板，按 `basic` / `privacy` / `ml` 分类，提供 `templateByKey`、`isTwoTableTemplate`、`isSingleTableTemplate` 等类型守卫。
+  - `use-template-wizard.ts` + `template-wizard.tsx`：通用模板向导。根据模板类型动态渲染双表/单表/无参数表单；自动加载节点数据表、列信息；创建时先 `createGraph` 获取 graphId，再 `template.build` 生成节点/边，最后 `updateGraph` 提交。
+- 在 `pages/dag/index.tsx` 中将旧“PSI 模板”按钮替换为“模板向导”按钮，接入 `TemplateWizard`。
+- 扩展 `shared/lib/i18n/dictionaries.ts` 的 `dag` 命名空间：新增 `template`、`templateWizardTitle`、`selectTemplate`、`templateCategory`、`templateName`、`templateDesc`、`templateSingleTable`、`templateNoInputsHint`、`featureColumns`、`labelColumn`、`predictionName`、`qiColumns`、`saColumns`、`queryColumn`、`sanitizationColumns` 等中英键值。
+- 将 `shared/lib/i18n/dictionaries.ts` 的字典类型由 `Record<string, string | Record<string, string>>` 改为递归接口 `Dictionary`，支持多层嵌套命名空间，同步更新 `I18nContext.tsx` 的 `getValue` 类型。
+- 验证：`corepack pnpm --filter @secretpad/app typecheck` 与 `corepack pnpm run lint` 通过（0 errors，历史 warning 50 个）。
 
 ### 7.11 弃用旧前端 frontend-src（Phase 5）
 
@@ -373,7 +375,7 @@ corepack pnpm exec playwright test
 | 结果管理独立页 | `result-manager` | 无独立页面 | ❌ 未迁移 | 新前端仅通过项目详情 / DAG 节点查看结果，缺少统一结果管理入口。 |
 | 隐私组件场景 | `privacy-scenes` | 无独立页面 | ❌ 未迁移 | 旧前端用于展示场景模板并快速创建项目；新前端无等效页面。 |
 | 新用户引导 | `guide`, `guide-pipeline`, `guide-node`, `guide-tour`, `dag-guide-tour`, `dag-record-guide-tour` | 无 | ❌ 未迁移 | 首次使用引导、DAG 操作引导均未实现。 |
-| DAG 模板向导 | `pipeline` | `pages/dag` | ⚠️ 部分迁移 | 仅 PSI 模板已迁移；其余 17 个模板未迁移。 |
+| DAG 模板向导 | `pipeline` | `features/dag-templates` + `pages/dag` | ✅ 已迁移 | 已迁移 blank/psi/data-classification/sanitization/k-anonymity/l-diversity/local-differential-privacy/differential-privacy/query-obfuscation/risk/tee 共 11 个模板；向导按 basic/privacy/ml 分类展示。 |
 | DAG 模型提交入口 | `dag-model-submission` | 无 | ❌ 未迁移 | 在 DAG 运行后选择节点进行模型打包/提交的抽屉未实现。 |
 | DAG 周期任务入口 | `main-dag/periodic-task-entry` | 无 | ❌ 未迁移 | 从 DAG 直接创建周期任务的入口未实现。 |
 | DAG 运行记录 / 报告 | `dag-record`, `pipeline-record-list`, `dag-result` | 无独立页面 | ⚠️ 部分迁移 | 项目详情与 DAG 节点面板可查看单次任务日志/输出；缺少统一的 pipeline 运行记录列表和结果报告页。 |
@@ -392,9 +394,10 @@ corepack pnpm exec playwright test
 
 #### 8.5.1 P0（影响日常核心流程，建议尽快补齐）
 
-1. **DAG 模板向导补全**（`pages/dag`）
-   - 旧模板：`privacy`、`risk`、`tee`、`sanitization`、`query-obfuscation`、`data-classification`、`k-anonymity`、`l-diversity`、`local-differential-privacy` 等。
-   - 建议：在 `pipeline-template-psi.ts` 模式基础上，逐个迁移模板文件，并统一在向导中按场景分类展示。
+1. **DAG 模板向导补全**（`features/dag-templates` + `pages/dag`） ✅ 已完成
+   - 已迁移模板：blank、psi、data-classification、sanitization、query-obfuscation、k-anonymity、l-diversity、local-differential-privacy、differential-privacy、risk、tee。
+   - 实现方式：每个模板为纯函数 `TemplateContribution.build(...)`，统一在 `registry.ts` 注册；`TemplateWizard` 按 basic/privacy/ml 分类展示，根据模板类型动态渲染双表/单表/无参数表单；创建时先调用 `createGraph` 获取 graphId，再调用 `template.build` 生成节点/边，最后 `updateGraph` 提交完整拓扑。
+   - 剩余模板（引导式向导、场景 PSI、TEE PSI 等）因与现有模板拓扑等效或属于体验增强，归入 P1/P2 按需迁移。
 
 2. **结果管理独立页面**（`pages/records` 或 `pages/results`）
    - 旧模块：`result-manager`、`result-details`、`pipeline-record-list`。
@@ -465,6 +468,6 @@ corepack pnpm exec playwright test
 ### 8.7 当前结论
 
 - 新前端已覆盖旧前端 **登录、Dashboard、项目、节点、数据源、数据表、模型管理、消息、周期任务、账户、机构、P2P 项目/节点** 等核心 CRUD 能力。
-- **DAG 画布、结果管理、模板向导、模型提交、周期任务入口** 是剩余最显著的迁移缺口。
+- **结果管理独立页、DAG 模型提交、DAG 周期任务入口** 是剩余最显著的迁移缺口。
 - **EDGE/P2P 工作台聚合页、新用户引导、数据上传、隐私场景展示页** 是次要的体验与平台适配缺口。
 - 旧前端中部分能力（如 `pages/graphs.tsx` 占位页、部分已弃用的 CENTER 工作台）可不再迁移，直接以新前端的独立路由方式替代。

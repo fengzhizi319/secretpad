@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import type { Locale } from './dictionaries';
+import type { Dictionary, Locale } from './dictionaries';
 import { dictionaries } from './dictionaries';
 
 const STORAGE_KEY = 'secretpad-locale';
@@ -23,9 +23,9 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-function getValue(dict: Record<string, string | Record<string, string>>, key: string): string | undefined {
+function getValue(dict: Dictionary, key: string): string | undefined {
   const parts = key.split('.');
-  let current: Record<string, string | Record<string, string>> | string | undefined = dict;
+  let current: Dictionary | string | undefined = dict;
   for (const part of parts) {
     if (typeof current !== 'object' || current === null) return undefined;
     current = current[part];

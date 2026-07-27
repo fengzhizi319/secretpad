@@ -14,6 +14,7 @@ import { DAGNextWorkspace } from '@secretpad/dag-next';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
+import { useTemplateWizard, TemplateWizard } from '../../features/dag-templates';
 
 function normalizeCodeName(codeName?: string): { domain: string; name: string } {
   if (!codeName) return { domain: 'unknown', name: 'unknown' };
@@ -105,15 +106,6 @@ export const DAGPage: React.FC = () => {
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [deleteGraphTarget, setDeleteGraphTarget] = useState<GraphMetaVO | null>(null);
-  // PSI template wizard state
-  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-  const [templateGraphName, setTemplateGraphName] = useState('');
-  const [templateReceiverNodeId, setTemplateReceiverNodeId] = useState('');
-  const [templateReceiverTableId, setTemplateReceiverTableId] = useState('');
-  const [templateReceiverKey, setTemplateReceiverKey] = useState('');
-  const [templateSenderNodeId, setTemplateSenderNodeId] = useState('');
-  const [templateSenderTableId, setTemplateSenderTableId] = useState('');
-  const [templateSenderKey, setTemplateSenderKey] = useState('');
 
   const dagLabels = useMemo(
     () => ({
@@ -214,23 +206,12 @@ export const DAGPage: React.FC = () => {
   });
   const graphDetail = graphDetailQuery.data ?? null;
 
-  const receiverTablesQuery = useQuery({
-    queryKey: ['node-datatables', templateReceiverNodeId],
-    queryFn: () => apiClient.getDataTables(templateReceiverNodeId),
-    enabled: !!templateReceiverNodeId,
-  });
-  const senderTablesQuery = useQuery({
-    queryKey: ['node-datatables', templateSenderNodeId],
-    queryFn: () => apiClient.getDataTables(templateSenderNodeId),
-    enabled: !!templateSenderNodeId,
-  });
-  const receiverTables = receiverTablesQuery.data ?? [];
-  const senderTables = senderTablesQuery.data ?? [];
-  const receiverSelectedTable = receiverTables.find((t) => t.tableId === templateReceiverTableId);
-  const senderSelectedTable = senderTables.find((t) => t.tableId === templateSenderTableId);
-
   const invalidateGraphs = () =>
     queryClient.invalidateQueries({ queryKey: ['graphs', selectedProjectId] });
+
+  const templateWizard = useTemplateWizard(selectedProject, (graphId) => {
+    setSelectedGraphId(graphId);
+  });
 
   const createGraphMutation = useMutation({
     mutationFn: () => apiClient.createGraph({ projectId: selectedProjectId, name: newGraphName }),
@@ -279,132 +260,6 @@ export const DAGPage: React.FC = () => {
     onError: (e) => setError(e instanceof Error ? e.message : String(e)),
   });
 
-  /**
-   * Create a pre-wired PSI template graph:
-   * 1) create an empty graph to obtain graphId,
-   * 2) update it with two read_data/datatable nodes and one data_prep/psi node,
-   * 3) wire the two sample tables into the PSI inputs.
-   */
-  const createTemplateGraphMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedProjectId || !selectedProject) {
-        throw new Error(t('projects.selectProject'));
-      }
-      if (
-        !templateReceiverNodeId ||
-        !templateReceiverTableId ||
-        !templateReceiverKey ||
-        !templateSenderNodeId ||
-        !templateSenderTableId ||
-        !templateSenderKey
-      ) {
-        throw new Error(t('dag.emptyCanvas'));
-      }
-      const name = templateGraphName.trim() || t('dag.templatePSI');
-      const graphId = await apiClient.createGraph({ projectId: selectedProjectId, name });
-      const makeNodeId = (suffix: string) => `${graphId}-${suffix}`;
-      const readReceiverId = makeNodeId('read-receiver');
-      const readSenderId = makeNodeId('read-sender');
-      const psiId = makeNodeId('psi');
-      const receiverOut = `${readReceiverId}-output-0`;
-      const senderOut = `${readSenderId}-output-0`;
-
-      const makeReadNode = (id: string, tableId: string): GraphNodeInfo => ({
-        graphNodeId: id,
-        codeName: 'read_data/datatable',
-        label: String(t('dag.readDataLabel')),
-        x: id === readReceiverId ? -390 : -150,
-        y: -210,
-        inputs: [],
-        outputs: [`${id}-output-0`],
-        nodeDef: {
-          domain: 'read_data',
-          name: 'datatable',
-          version: '0.0.1',
-          attrPaths: ['datatable_selected'],
-          attrs: [{ s: tableId, is_na: false }],
-        },
-      });
-
-      const psiNode: GraphNodeInfo = {
-        graphNodeId: psiId,
-        codeName: 'data_prep/psi',
-        label: String(t('dag.psiNodeLabel')),
-        x: -260,
-        y: -100,
-        inputs: [receiverOut, senderOut],
-        outputs: [`${psiId}-output-0`, `${psiId}-output-1`],
-        nodeDef: {
-          domain: 'data_prep',
-          name: 'psi',
-          version: '1.0.0',
-          attrPaths: [
-            'input/input_ds1/keys',
-            'input/input_ds2/keys',
-            'protocol',
-            'sort_result',
-            'receiver_parties',
-            'allow_empty_result',
-            'join_type',
-            'input_ds1_keys_duplicated',
-            'input_ds2_keys_duplicated',
-          ],
-          attrs: [
-            { ss: [templateReceiverKey], is_na: false },
-            { ss: [templateSenderKey], is_na: false },
-            { s: 'PROTOCOL_RR22', is_na: false },
-            { b: true, is_na: false },
-            { ss: [templateReceiverNodeId, templateSenderNodeId], is_na: false },
-            { is_na: true },
-            { s: 'inner_join', is_na: false },
-            { b: true, is_na: false },
-            { b: true, is_na: false },
-          ],
-        },
-      };
-
-      const edges: GraphEdge[] = [
-        {
-          edgeId: `${receiverOut}__${psiId}-input-0`,
-          source: readReceiverId,
-          target: psiId,
-          sourceAnchor: receiverOut,
-          targetAnchor: `${psiId}-input-0`,
-        },
-        {
-          edgeId: `${senderOut}__${psiId}-input-1`,
-          source: readSenderId,
-          target: psiId,
-          sourceAnchor: senderOut,
-          targetAnchor: `${psiId}-input-1`,
-        },
-      ];
-
-      await apiClient.updateGraph(
-        selectedProjectId,
-        graphId,
-        [makeReadNode(readReceiverId, templateReceiverTableId), makeReadNode(readSenderId, templateSenderTableId), psiNode],
-        edges
-      );
-      return graphId;
-    },
-    onSuccess: (graphId) => {
-      setIsTemplateModalOpen(false);
-      setTemplateGraphName('');
-      setTemplateReceiverNodeId('');
-      setTemplateReceiverTableId('');
-      setTemplateReceiverKey('');
-      setTemplateSenderNodeId('');
-      setTemplateSenderTableId('');
-      setTemplateSenderKey('');
-      invalidateGraphs();
-      queryClient.invalidateQueries({ queryKey: ['graph-detail', selectedProjectId, graphId] });
-      setSelectedGraphId(graphId);
-      toast.success(t('dag.templateCreated'));
-    },
-    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
-  });
-
   const handleCreateGraph = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProjectId || !newGraphName.trim()) return;
@@ -424,19 +279,7 @@ export const DAGPage: React.FC = () => {
   };
 
   const openTemplate = () => {
-    if (!selectedProject || selectedProject.nodes.length < 2) {
-      toast.error(t('projects.noProjects'));
-      return;
-    }
-    const [first, second] = selectedProject.nodes;
-    setTemplateReceiverNodeId(first.nodeId);
-    setTemplateSenderNodeId(second.nodeId);
-    setTemplateGraphName(`${t('dag.templatePSI')} ${new Date().toLocaleString()}`);
-    setTemplateReceiverTableId('');
-    setTemplateReceiverKey('');
-    setTemplateSenderTableId('');
-    setTemplateSenderKey('');
-    setIsTemplateModalOpen(true);
+    templateWizard.open();
   };
 
   const handleSaveGraph = async (nodes: DAGNode[], edges: DAGEdge[]) => {
@@ -632,9 +475,9 @@ export const DAGPage: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={openTemplate}
-              disabled={!selectedProject || selectedProject.nodes.length < 2}
+              disabled={!selectedProject || selectedProject.nodes.length === 0}
             >
-              {t('dag.templatePSI')}
+              {t('dag.template')}
             </Button>
             {hasRunningNodes && (
               <Button variant="outline" size="sm" loading={stopGraphMutation.isPending} onClick={() => stopGraphMutation.mutate()}>
@@ -780,141 +623,8 @@ export const DAGPage: React.FC = () => {
         onCancel={() => setDeleteGraphTarget(null)}
       />
 
-      {/* PSI Template Wizard Modal */}
-      <Modal
-        isOpen={isTemplateModalOpen}
-        onClose={() => setIsTemplateModalOpen(false)}
-        title={t('dag.templateTitle')}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setIsTemplateModalOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => createTemplateGraphMutation.mutate()}
-              loading={createTemplateGraphMutation.isPending}
-              disabled={
-                !templateGraphName.trim() ||
-                !templateReceiverNodeId ||
-                !templateReceiverTableId ||
-                !templateReceiverKey ||
-                !templateSenderNodeId ||
-                !templateSenderTableId ||
-                !templateSenderKey
-              }
-            >
-              {t('dag.createFromTemplate')}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4 text-xs">
-          <p className="text-gray-500">{t('dag.templateHint')}</p>
-          <div>
-            <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              {t('dag.nameLabel')}
-            </label>
-            <input
-              type="text"
-              value={templateGraphName}
-              onChange={(e) => setTemplateGraphName(e.target.value)}
-              className="w-full p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
-              required
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Receiver side */}
-            <div className="space-y-2">
-              <label className="block font-semibold text-gray-700 dark:text-gray-300">
-                {t('dag.templateReceiverTable')}
-              </label>
-              <select
-                value={templateReceiverNodeId}
-                onChange={(e) => setTemplateReceiverNodeId(e.target.value)}
-                className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
-              >
-                <option value="">{t('dag.selectNode')}</option>
-                {selectedProject?.nodes.map((n) => (
-                  <option key={n.nodeId} value={n.nodeId}>
-                    {n.nodeName || n.nodeId}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={templateReceiverTableId}
-                onChange={(e) => setTemplateReceiverTableId(e.target.value)}
-                disabled={receiverTables.length === 0}
-                className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
-              >
-                <option value="">{t('dag.selectTable')}</option>
-                {receiverTables.map((t) => (
-                  <option key={t.tableId} value={t.tableId}>
-                    {t.tableName || t.tableId}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={templateReceiverKey}
-                onChange={(e) => setTemplateReceiverKey(e.target.value)}
-                disabled={!receiverSelectedTable?.columns?.length}
-                className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
-              >
-                <option value="">{t('dag.selectKey')}</option>
-                {(receiverSelectedTable?.columns || []).map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name} ({c.type})
-                  </option>
-                ))}
-              </select>
-            </div>
-            {/* Sender side */}
-            <div className="space-y-2">
-              <label className="block font-semibold text-gray-700 dark:text-gray-300">
-                {t('dag.templateSenderTable')}
-              </label>
-              <select
-                value={templateSenderNodeId}
-                onChange={(e) => setTemplateSenderNodeId(e.target.value)}
-                className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
-              >
-                <option value="">{t('dag.selectNode')}</option>
-                {selectedProject?.nodes.map((n) => (
-                  <option key={n.nodeId} value={n.nodeId}>
-                    {n.nodeName || n.nodeId}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={templateSenderTableId}
-                onChange={(e) => setTemplateSenderTableId(e.target.value)}
-                disabled={senderTables.length === 0}
-                className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
-              >
-                <option value="">{t('dag.selectTable')}</option>
-                {senderTables.map((t) => (
-                  <option key={t.tableId} value={t.tableId}>
-                    {t.tableName || t.tableId}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={templateSenderKey}
-                onChange={(e) => setTemplateSenderKey(e.target.value)}
-                disabled={!senderSelectedTable?.columns?.length}
-                className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
-              >
-                <option value="">{t('dag.selectKey')}</option>
-                {(senderSelectedTable?.columns || []).map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name} ({c.type})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      {/* DAG Template Wizard */}
+      <TemplateWizard project={selectedProject} {...templateWizard} />
     </div>
   );
 };

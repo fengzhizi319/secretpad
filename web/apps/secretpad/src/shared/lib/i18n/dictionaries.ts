@@ -1,6 +1,14 @@
 export type Locale = 'zh-CN' | 'en-US';
 
-const zh: Record<string, string | Record<string, string>> = {
+/**
+ * 递归字典类型：支持任意层级的嵌套对象，叶子节点为翻译字符串。
+ * 使用接口 + 索引签名避免 `type alias` 循环引用错误。
+ */
+export interface Dictionary {
+  [key: string]: string | Dictionary;
+}
+
+const zh: Dictionary = {
   app: {
     title: 'SecretPad 隐私计算平台',
     loading: '加载中...',
@@ -363,18 +371,60 @@ const zh: Record<string, string | Record<string, string>> = {
     rename: '重命名',
     renameTitle: '重命名 DAG 图',
     renameSuccess: '重命名成功',
+    template: '模板向导',
     templatePSI: 'PSI 模板',
-    templateTitle: '从 PSI 模板创建图',
+    templateWizardTitle: '从模板创建 DAG 图',
+    selectTemplate: '选择模板',
+    templateCategory: {
+      basic: '基础模板',
+      privacy: '隐私组件',
+      ml: '机器学习',
+    },
+    templateName: {
+      blank: '空白图',
+      psi: '隐私求交 (PSI)',
+      dataClassification: '数据分类分级',
+      sanitization: '数据脱敏',
+      kAnonymity: 'K-匿名',
+      lDiversity: 'L-多样性',
+      localDifferentialPrivacy: '本地差分隐私',
+      differentialPrivacy: '差分隐私查询',
+      queryObfuscation: '查询混淆',
+      risk: '二分类建模 (MPC)',
+      tee: '二分类建模 (TEE)',
+    },
+    templateDesc: {
+      blank: '从空画布开始自由编排',
+      psi: '两方数据表隐私求交',
+      dataClassification: '自动识别数据敏感级别',
+      sanitization: '对选定列执行 auto_mask 脱敏',
+      kAnonymity: '按准标识列与敏感列执行 K-匿名',
+      lDiversity: '按准标识列与敏感列执行 L-多样性',
+      localDifferentialPrivacy: '对指定列做本地扰动',
+      differentialPrivacy: 'count 类型的差分隐私查询',
+      queryObfuscation: '批量查询语义混淆',
+      risk: 'MPC 二分类风控建模（PSI + WOE + LR）',
+      tee: 'TEE 二分类建模（PSI + WOE + LR）',
+    },
     templateReceiverTable: '接收方样本表',
     templateSenderTable: '发送方样本表',
+    templateSingleTable: '样本表',
+    templateNoInputsHint: '该模板无需额外参数，确认图名称后即可创建。',
     receiverKey: '接收方关联键',
     senderKey: '发送方关联键',
     createFromTemplate: '创建模板图',
-    templateHint: '选择两个项目的已授权数据表，自动生成 read_data → PSI 的初始 DAG。',
-    templateCreated: 'PSI 模板图已创建',
+    templateHint: '选择模板并填写必要参数，自动生成初始 DAG。',
+    templateCreated: '模板图已创建',
     selectNode: '选择节点',
     selectTable: '选择数据表',
     selectKey: '选择关联键',
+    featureColumns: '特征列',
+    labelColumn: '标签列',
+    predictionName: '预测结果列名',
+    qiColumns: '准标识列 (QI)',
+    saColumns: '敏感列 (SA)',
+    queryColumn: '查询列',
+    sanitizationColumns: '待脱敏列',
     readDataLabel: '样本表',
     psiNodeLabel: '隐私求交',
   },
@@ -476,7 +526,7 @@ const zh: Record<string, string | Record<string, string>> = {
   },
 };
 
-const en: Record<string, string | Record<string, string>> = {
+const en: Dictionary = {
   app: {
     title: 'SecretPad Privacy Computing Platform',
     loading: 'Loading...',
@@ -838,18 +888,60 @@ const en: Record<string, string | Record<string, string>> = {
     rename: 'Rename',
     renameTitle: 'Rename DAG Graph',
     renameSuccess: 'Renamed successfully',
+    template: 'Template Wizard',
     templatePSI: 'PSI Template',
-    templateTitle: 'Create Graph from PSI Template',
+    templateWizardTitle: 'Create DAG from Template',
+    selectTemplate: 'Select Template',
+    templateCategory: {
+      basic: 'Basic',
+      privacy: 'Privacy',
+      ml: 'Machine Learning',
+    },
+    templateName: {
+      blank: 'Blank Canvas',
+      psi: 'Privacy Set Intersection',
+      dataClassification: 'Data Classification',
+      sanitization: 'Data Sanitization',
+      kAnonymity: 'K-Anonymity',
+      lDiversity: 'L-Diversity',
+      localDifferentialPrivacy: 'Local Differential Privacy',
+      differentialPrivacy: 'Differential Privacy Query',
+      queryObfuscation: 'Query Obfuscation',
+      risk: 'Binary Classification (MPC)',
+      tee: 'Binary Classification (TEE)',
+    },
+    templateDesc: {
+      blank: 'Start from an empty canvas',
+      psi: 'Privacy set intersection between two tables',
+      dataClassification: 'Auto classify data sensitivity levels',
+      sanitization: 'Apply auto_mask to selected columns',
+      kAnonymity: 'K-anonymity by QI and SA columns',
+      lDiversity: 'L-diversity by QI and SA columns',
+      localDifferentialPrivacy: 'Perturb values in a target column',
+      differentialPrivacy: 'Count query with differential privacy',
+      queryObfuscation: 'Batch query semantic obfuscation',
+      risk: 'MPC binary risk modeling (PSI + WOE + LR)',
+      tee: 'TEE binary classification (PSI + WOE + LR)',
+    },
     templateReceiverTable: 'Receiver Sample Table',
     templateSenderTable: 'Sender Sample Table',
+    templateSingleTable: 'Sample Table',
+    templateNoInputsHint: 'This template requires no extra parameters. Confirm the graph name to create.',
     receiverKey: 'Receiver Key',
     senderKey: 'Sender Key',
     createFromTemplate: 'Create Template Graph',
-    templateHint: 'Select authorized data tables from two nodes to auto-generate a read_data → PSI DAG.',
-    templateCreated: 'PSI template graph created',
+    templateHint: 'Select a template and fill in required parameters to auto-generate the initial DAG.',
+    templateCreated: 'Template graph created',
     selectNode: 'Select Node',
     selectTable: 'Select Data Table',
     selectKey: 'Select Key Column',
+    featureColumns: 'Feature Columns',
+    labelColumn: 'Label Column',
+    predictionName: 'Prediction Column Name',
+    qiColumns: 'Quasi-Identifier Columns',
+    saColumns: 'Sensitive Attribute Columns',
+    queryColumn: 'Query Column',
+    sanitizationColumns: 'Columns to Sanitize',
     readDataLabel: 'Sample Table',
     psiNodeLabel: 'Privacy Set Intersection',
   },
@@ -951,7 +1043,7 @@ const en: Record<string, string | Record<string, string>> = {
   },
 };
 
-export const dictionaries: Record<Locale, Record<string, string | Record<string, string>>> = {
+export const dictionaries: Record<Locale, Dictionary> = {
   'zh-CN': zh,
   'en-US': en,
 };
