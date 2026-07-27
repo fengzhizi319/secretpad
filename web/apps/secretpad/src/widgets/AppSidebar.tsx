@@ -22,6 +22,7 @@ export const AppSidebar: React.FC = () => {
         { section: t('sidebar.governance') },
         { path: '/models', label: t('sidebar.models'), icon: '🤖' },
         { path: '/messages', label: t('sidebar.messages'), icon: '🔔' },
+        { path: '/privacy-scenes', label: t('sidebar.privacyScenes'), icon: '🛡️' },
         { path: '/account', label: t('sidebar.account'), icon: '👤' },
       ]
     : [
@@ -41,6 +42,7 @@ export const AppSidebar: React.FC = () => {
         { path: '/results', label: t('sidebar.results'), icon: '📦' },
         { path: '/periodic-tasks', label: t('sidebar.periodicTasks'), icon: '⏰' },
         { path: '/messages', label: t('sidebar.messages'), icon: '🔔' },
+        { path: '/privacy-scenes', label: t('sidebar.privacyScenes'), icon: '🛡️' },
         { path: '/account', label: t('sidebar.account'), icon: '👤' },
       ];
 

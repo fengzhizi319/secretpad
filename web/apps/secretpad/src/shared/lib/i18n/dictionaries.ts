@@ -558,6 +558,57 @@ const zh: Dictionary = {
     initiator: '发起方',
     invitees: '受邀方',
   },
+  privacyScenes: {
+    title: '隐私计算场景',
+    subtitle: '探索隐私求交、MPC/TEE 建模、数据分类分级、本地隐私等核心场景',
+    tryIt: '立即体验',
+    scene: {
+      psi: {
+        title: '隐私求交 (PSI)',
+        desc: '两方数据表在不泄露明文的情况下计算交集，常用于用户 ID 对齐、样本对齐。',
+      },
+      mpcRisk: {
+        title: 'MPC 风控建模',
+        desc: '基于多方安全计算（MPC）完成隐私求交、WOE 分箱、逻辑回归训练。',
+      },
+      tee: {
+        title: 'TEE 可信建模',
+        desc: '在可信执行环境（TEE）中完成隐私求交与模型训练，兼顾性能与隐私。',
+      },
+      classification: {
+        title: '数据分类分级',
+        desc: '自动识别数据表字段的敏感级别（L1~L5），为后续隐私处理提供依据。',
+      },
+      sanitization: {
+        title: '数据脱敏',
+        desc: '对敏感字段执行 auto_mask 等脱敏策略，降低数据泄露风险。',
+      },
+      kAnonymity: {
+        title: 'K-匿名',
+        desc: '按准标识列与敏感列对数据表执行 K-匿名处理，保护个体身份。',
+      },
+      lDiversity: {
+        title: 'L-多样性',
+        desc: '在 K-匿名基础上确保敏感属性具有足够多样性，防止同质攻击。',
+      },
+      localDp: {
+        title: '本地差分隐私',
+        desc: '在数据本地采集阶段对指定列注入噪声，满足差分隐私保护。',
+      },
+      dpQuery: {
+        title: '差分隐私查询',
+        desc: '在聚合查询结果中添加 calibrated 噪声，保护个体记录隐私。',
+      },
+      queryObfuscation: {
+        title: '查询混淆',
+        desc: '对批量查询语义进行混淆处理，防止查询意图泄露。',
+      },
+      federatedLearning: {
+        title: '联邦学习',
+        desc: '多方在不共享原始数据的前提下联合训练机器学习模型。',
+      },
+    },
+  },
   account: {
     title: '用户中心',
     subtitle: '账户信息与密码管理',

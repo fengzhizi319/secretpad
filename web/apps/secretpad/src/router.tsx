@@ -35,6 +35,7 @@ const InstitutionsPage = lazyPage(() => import('./pages/institutions'), 'Institu
 const P2pProjectsPage = lazyPage(() => import('./pages/p2p/projects'), 'P2pProjectsPage');
 const P2pMyNodePage = lazyPage(() => import('./pages/p2p/my-node'), 'P2pMyNodePage');
 const AccountPage = lazyPage(() => import('./pages/account'), 'AccountPage');
+const PrivacyScenesPage = lazyPage(() => import('./pages/privacy-scenes'), 'PrivacyScenesPage');
 
 /**
  * Read the auth token directly from localStorage (not the Zustand store).
@@ -230,6 +231,12 @@ export const messagesRoute = createRoute({
   component: MessagesPage,
 });
 
+export const privacyScenesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/privacy-scenes',
+  component: PrivacyScenesPage,
+});
+
 export const nodeRoutesRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/node-routes',
@@ -275,6 +282,7 @@ const routeTree = rootRoute.addChildren([
     resultsRoute,
     periodicTasksRoute,
     messagesRoute,
+    privacyScenesRoute,
     nodeRoutesRoute,
     institutionsRoute,
     p2pProjectsRoute,
