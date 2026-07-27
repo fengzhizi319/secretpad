@@ -292,6 +292,15 @@ corepack pnpm exec playwright test
 - 补充 `i18n/dictionaries.ts`：`dataUpload.*` 命名空间（中英双语）。
 - 验证：`corepack pnpm --filter @secretpad/app typecheck` 与 `corepack pnpm run lint` 通过（0 errors）。
 
+### 7.17 隐私组件场景展示页（P2 Phase 10）
+
+- 新增 `pages/privacy-scenes/index.tsx`：
+  - 以卡片网格展示 11 个隐私计算场景：PSI、MPC 风控建模、TEE 可信建模、数据分类分级、数据脱敏、K-匿名、L-多样性、本地差分隐私、差分隐私查询、查询混淆、联邦学习。
+  - 每个场景卡片包含场景标题、中文/英文描述、核心技术标签（如 PSI、MPC、TEE、DP 等）、“立即体验”按钮，点击后跳转到 DAG 或数据表页面。
+- 在 `router.tsx` 以懒加载方式注册 `/privacy-scenes` 路由，在 `AppSidebar` governance 区增加侧边栏入口。
+- 补充 `i18n/dictionaries.ts`：`privacyScenes.*` 命名空间（中英双语）。
+- 验证：`corepack pnpm --filter @secretpad/app typecheck` 与 `corepack pnpm run lint` 通过（0 errors）。
+
 ### 7.15 迁移完成度总结（更新）
 
 - P0 功能（DAG 模板库、结果管理独立页、DAG 模型提交入口、DAG 周期任务入口）已全部完成。
@@ -492,8 +501,10 @@ corepack pnpm exec playwright test
 
 #### 8.5.3 P2（高级/低频功能，按需迁移）
 
-11. **隐私组件场景展示页**（`pages/privacy-scenes`）
-    - 用于演示场景和快速创建示例项目，产品展示价值高，但非核心生产流程。
+11. **隐私组件场景展示页**（`pages/privacy-scenes`）✅ 已完成
+    - 旧模块：`privacy-scenes`。
+    - 新前端：`pages/privacy-scenes/index.tsx`。
+    - 实现：卡片式展示 11 个隐私计算场景（PSI、MPC 风控、TEE、数据分类分级、脱敏、K-匿名、L-多样性、本地 DP、DP 查询、查询混淆、联邦学习），每个场景包含技术标签与“立即体验”跳转按钮；新增 `/privacy-scenes` 路由与侧边栏入口。
 
 12. **模型导出与发布详情**（`pages/models`）
     - 对接 `ModelExportController` 和 `model-manager/model-release`。
