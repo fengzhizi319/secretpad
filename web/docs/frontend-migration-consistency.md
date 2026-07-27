@@ -234,7 +234,11 @@ corepack pnpm exec playwright test
 - 更新 `scripts/clone-repos.sh`：不再从独立 `secretpad-frontend` 仓库克隆旧前端；secretpad 仓库自带新前端 `secretpad/web/`。
 - 更新 `scripts/dev-start.sh`：环境检测、前端依赖安装、启动命令全部切换为 `secretpad/web/` 与 `corepack pnpm --filter @secretpad/app dev`；增加 180s 端口监听 + 30s HTTP 200 二次确认。
 - 更新 `scripts/run-all-no-docker.sh`：无 Docker 模式前端启动同样切换为 `secretpad/web/`。
+- 改进 `scripts/dev-stop.sh`：停止前端时递归终止 `pnpm -> node -> Vite` 所有后代进程，避免子进程残留继续占用 8000 端口；所有脚本路径引用统一为 `scripts/` / `scripts1/` 一致。
 - 更新顶层 `README.md` 与 `AGENTS.md`：前端目录、启动命令、架构图统一改为 `secretpad/web/` + Vite，并标注旧前端已弃用删除。
-- 验证：类型检查与 lint 通过；脚本仅通过静态检查（未执行全量启动）。
+- 验证：
+  - `corepack pnpm typecheck` / `pnpm run lint` 通过（0 errors，历史 warning 48 个）。
+  - `bash -n scripts/dev-start.sh scripts/dev-stop.sh scripts1/dev-start.sh scripts1/dev-stop.sh` 通过。
+  - 执行完整 `bash scripts1/dev-start.sh`：后端 HTTP 8080、前端 8000 首页均返回 200；`POST /api/login` 成功返回 token；`POST /api/v1alpha1/node/list` 成功返回 alice/bob 节点；执行 `bash scripts1/dev-stop.sh` 后 8000/8080/8443 端口全部释放。
 
 
