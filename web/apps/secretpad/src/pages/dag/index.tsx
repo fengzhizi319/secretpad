@@ -16,6 +16,7 @@ import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
 import { useTemplateWizard, TemplateWizard } from '../../features/dag-templates';
 import { ModelPackModal } from '../../features/model-pack';
+import { ScheduledTaskFromDagModal } from '../../features/scheduled-task-from-dag';
 
 function normalizeCodeName(codeName?: string): { domain: string; name: string } {
   if (!codeName) return { domain: 'unknown', name: 'unknown' };
@@ -109,6 +110,7 @@ export const DAGPage: React.FC = () => {
   const [deleteGraphTarget, setDeleteGraphTarget] = useState<GraphMetaVO | null>(null);
   const [selectedNode, setSelectedNode] = useState<DAGNode | null>(null);
   const [isPackModalOpen, setIsPackModalOpen] = useState(false);
+  const [isScheduledModalOpen, setIsScheduledModalOpen] = useState(false);
 
   const dagLabels = useMemo(
     () => ({
@@ -482,6 +484,15 @@ export const DAGPage: React.FC = () => {
             >
               {t('dag.template')}
             </Button>
+            {selectedGraph && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsScheduledModalOpen(true)}
+              >
+                {t('dag.createPeriodicTask')}
+              </Button>
+            )}
             {selectedNode && selectedNode.status === 'Success' && (selectedNode.codeName || '').includes('train') && (
               <Button
                 variant="outline"
@@ -651,6 +662,18 @@ export const DAGPage: React.FC = () => {
             setIsPackModalOpen(false);
             toast.success(t('models.packSuccess'));
           }}
+        />
+      )}
+
+      {/* DAG Scheduled Task Modal */}
+      {selectedGraph && (
+        <ScheduledTaskFromDagModal
+          isOpen={isScheduledModalOpen}
+          onClose={() => setIsScheduledModalOpen(false)}
+          projectId={selectedProjectId}
+          graphId={selectedGraph.graphId || ''}
+          graphName={selectedGraph.name}
+          nodes={nodes}
         />
       )}
     </div>
