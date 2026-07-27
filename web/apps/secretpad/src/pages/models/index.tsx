@@ -7,8 +7,20 @@ import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
 
-const PACKING_STATS = ['PACKING', 'PUBLISHING', 'EXPORTING'];
+const PACKING_STATS = ['PACKING', 'PUBLISHING', 'EXPORTING', 'INITIATED'];
 
+/**
+ * 模型管理页面。
+ *
+ * 设计要点：
+ * 1. 按项目维度展示模型产物，支持打包(Pack)、部署(Deploy)、废弃(Discard)与删除。
+ * 2. 打包流程需要调用 `/api/v1alpha1/model/modelPartyPath` 获取每个参与方的默认数据源，
+ *    再构造 `modelPartyConfig` 与 `modelComponent` 提交给 `/api/v1alpha1/model/pack`。
+ *    仅传空数组会导致后端 NPE/越界错误，因此必须根据训练节点图信息填充。
+ * 3. 打包是异步作业，提交成功后使用 `getModelStatus` 轮询，直到 SUCCEED 或 FAILED，
+ *    成功后刷新模型列表。
+ * 4. 部署服务基于已打包完成的模型，调用 `model/serving/create`。
+ */
 export const ModelsPage: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -28,6 +40,10 @@ export const ModelsPage: React.FC = () => {
   const [packGraphId, setPackGraphId] = useState('');
   const [packTrainNodeId, setPackTrainNodeId] = useState('');
   const [packModelName, setPackModelName] = useState('');
+  // 每个参与方的默认数据源选择：key 为 nodeId，value 为 dataSourceId
+  const [packPartySources, setPackPartySources] = useState<Record<string, string>>({});
+  // 打包任务 ID，用于轮询
+  const [packJobId, setPackJobId] = useState<string | null>(null);
 
   // Discard confirm
   const [discardTarget, setDiscardTarget] = useState<ModelPackVO | null>(null);
@@ -78,6 +94,77 @@ export const ModelsPage: React.FC = () => {
     (n.codeName || '').includes('train')
   );
 
+  // 当选择训练节点后，查询模型参与方路径，用于构造 modelPartyConfig。
+  const selectedTrainNode = useMemo(
+    () => trainNodes.find((n) => n.graphNodeId === packTrainNodeId),
+    [trainNodes, packTrainNodeId]
+  );
+  const modelPartyPathQuery = useQuery({
+    queryKey: ['model-party-path', selectedProjectId, packGraphId, packTrainNodeId],
+    queryFn: async () => {
+      if (!selectedTrainNode || !selectedTrainNode.outputs?.[0]) return [];
+      return apiClient.getModelPartyPath({
+        projectId: selectedProjectId,
+        graphNodeId: selectedTrainNode.graphNodeId!,
+        graphNodeOutPutId: selectedTrainNode.outputs[0],
+      });
+    },
+    enabled: packOpen && !!selectedTrainNode && !!selectedTrainNode.outputs?.[0],
+  });
+  const partyPaths = modelPartyPathQuery.data ?? [];
+
+  // 模型参与方路径加载后，将每个参与方的数据源默认设置为第一个可用数据源。
+  useEffect(() => {
+    const defaults: Record<string, string> = {};
+    partyPaths.forEach((p) => {
+      const firstSource = (p.dataSources?.[0] as any)?.dataSourceId as string | undefined;
+      const partyId = p.nodeId || '';
+      if (firstSource && partyId) {
+        defaults[partyId] = firstSource;
+      }
+    });
+    setPackPartySources((prev) => ({ ...defaults, ...prev }));
+  }, [partyPaths]);
+
+  // 打包状态轮询：提交成功后每 3 秒查询一次，直到成功或失败。
+  const packStatusQuery = useQuery({
+    queryKey: ['model-pack-status', packJobId, selectedProjectId],
+    queryFn: async () => {
+      if (!packJobId || !selectedProjectId) return null;
+      return apiClient.getModelStatus(packJobId, selectedProjectId);
+    },
+    enabled: !!packJobId && !!selectedProjectId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.toUpperCase?.() || '';
+      const ongoing = !['SUCCEED', 'FAILED'].includes(status);
+      return ongoing ? 3000 : false;
+    },
+  });
+
+  const resetPackForm = () => {
+    setPackGraphId('');
+    setPackTrainNodeId('');
+    setPackModelName('');
+    setPackPartySources({});
+    setPackJobId(null);
+  };
+
+  // 打包完成后自动刷新模型列表并给出提示。
+  useEffect(() => {
+    const status = packStatusQuery.data?.toUpperCase?.() || '';
+    if (!packJobId || !status) return;
+    if (status === 'SUCCEED') {
+      toast.success(t('models.packSucceeded'));
+      setPackJobId(null);
+      setPackOpen(false);
+      resetPackForm();
+      invalidateModels();
+    } else if (status === 'FAILED') {
+      toast.error(t('models.packFailed'));
+      setPackJobId(null);
+    }
+  }, [packStatusQuery.data, packJobId, t]);
+
   const deployMutation = useMutation({
     mutationFn: () => apiClient.createModelServing({ modelId: deployModelId, projectId: deployProjectId }),
     onSuccess: () => {
@@ -90,25 +177,59 @@ export const ModelsPage: React.FC = () => {
   });
 
   const packMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const trainNode = trainNodes.find((n) => n.graphNodeId === packTrainNodeId);
+      if (!trainNode || !trainNode.outputs?.[0]) {
+        throw new Error(t('models.noTrainNodeOutput'));
+      }
+      if (!partyPaths.length) {
+        throw new Error(t('models.noPartyPath'));
+      }
+      const outputId = trainNode.outputs[0];
+
+      // 构造 modelPartyConfig：每个参与方必须指定 modelParty、modelDataSource、modelDataName。
+      const modelPartyConfig = partyPaths.map((p) => {
+        const partyId = p.nodeId || '';
+        const sources = (p.dataSources || []) as Array<Record<string, any>>;
+        const selectedSource =
+          sources.find((s) => s.dataSourceId === packPartySources[partyId]) || sources[0];
+        return {
+          modelParty: partyId,
+          modelDataSource: selectedSource?.dataSourceId || 'default-data-source',
+          modelDataName: p.nodeName || partyId,
+        };
+      });
+
+      // 构造 modelComponent：当前仅包含训练节点本身（无预处理/预测节点时）。
+      const modelComponent = [
+        {
+          graphNodeId: trainNode.graphNodeId,
+          domain: trainNode.nodeDef?.domain || 'ml.train',
+          name: trainNode.nodeDef?.name || trainNode.codeName?.split('/')[1] || 'ss_sgd_train',
+          version: trainNode.nodeDef?.version || '1.0.0',
+        },
+      ];
+
       return apiClient.packModel({
         projectId: selectedProjectId,
         graphId: packGraphId,
         trainId: packTrainNodeId,
         modelName: packModelName,
-        graphNodeOutPutId: trainNode?.outputs?.[0] || `${packTrainNodeId}-output-0`,
-        modelPartyConfig: [],
-        modelComponent: [],
+        graphNodeOutPutId: outputId,
+        modelPartyConfig,
+        modelComponent,
       });
     },
-    onSuccess: () => {
-      setPackOpen(false);
-      setPackGraphId('');
-      setPackTrainNodeId('');
-      setPackModelName('');
-      invalidateModels();
-      toast.success(t('models.packSuccess'));
+    onSuccess: (res) => {
+      if (res?.jobId) {
+        setPackJobId(res.jobId);
+        toast.success(t('models.packPolling'));
+      } else {
+        setPackOpen(false);
+        resetPackForm();
+        invalidateModels();
+        toast.success(t('models.packSuccess'));
+      }
     },
     onError: (e) => setError(e instanceof Error ? e.message : String(e)),
   });
@@ -151,9 +272,7 @@ export const ModelsPage: React.FC = () => {
   };
 
   const openPack = () => {
-    setPackGraphId('');
-    setPackTrainNodeId('');
-    setPackModelName('');
+    resetPackForm();
     setPackOpen(true);
   };
 
@@ -265,12 +384,19 @@ export const ModelsPage: React.FC = () => {
       {/* Pack Model Modal */}
       <Modal
         isOpen={packOpen}
-        onClose={() => setPackOpen(false)}
+        onClose={() => { setPackOpen(false); resetPackForm(); }}
         title={t('models.pack')}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setPackOpen(false)}>{t('common.cancel')}</Button>
-            <Button variant="primary" onClick={() => packMutation.mutate()} loading={packMutation.isPending} disabled={!packGraphId || !packTrainNodeId || !packModelName.trim()}>{t('models.pack')}</Button>
+            <Button variant="ghost" onClick={() => { setPackOpen(false); resetPackForm(); }}>{t('common.cancel')}</Button>
+            <Button
+              variant="primary"
+              onClick={() => packMutation.mutate()}
+              loading={packMutation.isPending || (!!packJobId && packStatusQuery.data?.toUpperCase?.() !== 'SUCCEED' && packStatusQuery.data?.toUpperCase?.() !== 'FAILED')}
+              disabled={!packGraphId || !packTrainNodeId || !packModelName.trim() || !partyPaths.length || Object.keys(packPartySources).length < partyPaths.length}
+            >
+              {packJobId ? t('models.packing') : t('models.pack')}
+            </Button>
           </>
         }
       >
@@ -311,6 +437,41 @@ export const ModelsPage: React.FC = () => {
               required
             />
           </div>
+
+          {partyPaths.length > 0 && (
+            <div>
+              <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">{t('models.partyDataSources')}</label>
+              <div className="space-y-2">
+                {partyPaths.map((p, idx) => {
+                  const partyId = p.nodeId || `party-${idx}`;
+                  const sources = (p.dataSources || []) as Array<{
+                    dataSourceId?: string;
+                    dataSourceName?: string;
+                    type?: string;
+                  }>;
+                  return (
+                    <div key={partyId} className="flex items-center gap-2">
+                      <span className="w-20 font-medium text-gray-600 dark:text-gray-400">{p.nodeName || partyId}</span>
+                      <select
+                        value={packPartySources[partyId] || sources[0]?.dataSourceId || ''}
+                        onChange={(e) => setPackPartySources((prev) => ({ ...prev, [partyId]: e.target.value }))}
+                        className="flex-1 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
+                      >
+                        {sources.map((s) => (
+                          <option key={s.dataSourceId} value={s.dataSourceId}>{s.dataSourceName || s.dataSourceId} ({s.type})</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {modelPartyPathQuery.isLoading && <div className="text-gray-400">{t('models.loadingPartyPath')}</div>}
+          {modelPartyPathQuery.error && (
+            <div className="text-red-500">{t('models.partyPathError', { message: modelPartyPathQuery.error.message })}</div>
+          )}
         </div>
       </Modal>
 

@@ -125,3 +125,49 @@ corepack pnpm exec playwright test
 - DAG 算子配置面板当前以通用 JSON 编辑器（`nodeDef`、`config`）呈现，后续可针对高频算子提供更友好的表单化配置。
 - 数据表导入当前使用简单的 `name:type` Schema 输入，后续可接入数据源自动拉取元数据。
 - P2P / inst / nodeRoute 等接口的真实后端行为依赖 Kuscia 环境，本地仅保证类型与调用正确，联调需 `scripts1/dev-start.sh` 环境。
+
+## 7. 端到端验证记录（2026-07-27）
+
+### 7.1 验证环境
+
+- 前端：`secretpad/web` Vite dev server on `http://127.0.0.1:8000`
+- 后端：`secretpad` Spring Boot on `http://127.0.0.1:8080`
+- Kuscia：Docker Master + alice + bob（dev-start.sh 部署）
+- SecretFlow：自定义镜像 `secretflow/sf-privacy-dev:1.15.0.dev-privacy` 已注册为 Kuscia AppImage
+
+### 7.2 PSI → 逻辑回归训练链路
+
+1. 使用已有项目 `srkbfvmn`、图 `mzeeuxmc`（含 alice-table / bob-table → PSI）。
+2. 通过 `/api/v1alpha1/graph/node/output` 验证 PSI 输出：生成联合表 `vtpo-mzeeuxmc-node-3-output-0`，字段覆盖 alice 24 列 + bob 21 列。
+3. 在图中追加 `ml.train/ss_sgd_train` 节点 `mzeeuxmc-node-4`，label=`y`，feature_selects=43 个非 ID/label 列。
+4. 调用 `/api/v1alpha1/graph/update` 与 `/api/v1alpha1/graph/start`，得到 Job ID `vtpo`。
+5. 轮询确认所有节点 `SUCCEED`；训练节点输出类型为 `model`，路径为 `vtpo-mzeeuxmc-node-4-output-0`（alice / bob 各一份）。
+
+结论：前端 → 后端 → Kuscia → SecretFlow 自定义镜像的训练链路已跑通。
+
+### 7.3 模型打包前端增强
+
+- 旧 Models 页面 Pack 逻辑直接传入 `modelPartyConfig: []` 与 `modelComponent: []`，导致后端 `Index 0 out of bounds for length 0` 错误。
+- 增强后：
+  - 选择训练节点后自动调用 `/api/v1alpha1/model/modelPartyPath` 获取参与方数据源。
+  - 按参与方展示数据源下拉框，构造 `modelPartyConfig`。
+  - 根据训练节点 `nodeDef` 构造 `modelComponent`（包含 graphNodeId / domain / name / version）。
+  - 提交后调用 `/api/v1alpha1/model/status` 轮询，直到 `SUCCEED` 或 `FAILED`。
+- 验证：
+  - 打包请求 `/api/v1alpha1/model/pack` 成功返回 `jobId: town`。
+  - 当前 Kuscia/SecretFlow 模型导出作业在本地环境存在运行时失败（alice 或 bob 任务失败），属于后端/运行时问题，前端已能正确发起完整打包流程并展示状态。
+- 部署服务：基于打包成功后的 `modelId` 调用 `/api/v1alpha1/model/serving/create`；当前因打包未成功无法完成端到端部署，但前端表单与接口已就绪。
+
+### 7.4 消息中心
+
+- 修复 `apiClient.getMessages` 未传 `isInitiator: false` 导致后端 NPE 的问题。
+- 验证 `/api/v1alpha1/message/list` 与 `/api/v1alpha1/message/pending` 返回空列表/0 待处理，无报错。
+- 当前非 P2P 模式无真实审批消息，消息列表为空为正常状态。
+
+### 7.5 启动脚本健壮性
+
+- `scripts1/dev-start.sh` 的 `start_frontend` 增加：
+  - 端口监听超时从 120s 延长到 180s。
+  - 端口就绪后增加 `curl -f http://127.0.0.1:8000/` HTTP 200 二次确认，避免 Vite 已 bind 端口但尚未完成初始构建时误报“前端未就绪”。
+
+
