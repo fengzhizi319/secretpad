@@ -534,7 +534,10 @@ export const apiClient = {
 
   async getMessages(ownerId: string, page = 1, size = 100): Promise<MessageVO[]> {
     const { data, error } = await api.POST('/api/v1alpha1/message/list', {
-      body: { ownerId, page, size } as components['schemas']['MessageListRequest'],
+      // isInitiator 在 OpenAPI 声明中是可选的，但后端反序列化时使用了 boolean
+      // 基本类型，缺失会被解析为 null，触发 NPE。因此显式传入 false，表示当前
+      // 用户作为消息参与方（非发起方）拉取待处理消息列表。
+      body: { ownerId, page, size, isInitiator: false } as components['schemas']['MessageListRequest'],
     });
     if (error) throw new Error(apiError(error));
     const payload = unwrap(data as unknown as SecretPadResponse<{ messages?: MessageVO[]; list?: MessageVO[] }>);

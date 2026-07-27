@@ -79,10 +79,9 @@ docs/_build
 /db/secretpadQuartz.mv.db.mv.db
 /.cloudide/
 
-### Local tools / runtime / sub-project ###
-.tools/
-scripts/config/certs/
-frontend-src/
+### Local runtime artifacts (dev scripts may leave these in project root if run with unexpected CWD)
+/backend.log
+/backend.pid
 
 ### New Vite frontend (secretpad/web) ###
 /web/**/node_modules/
