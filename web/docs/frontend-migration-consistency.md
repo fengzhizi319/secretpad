@@ -123,6 +123,7 @@ corepack pnpm exec playwright test
 - 节点 Token 弹窗已支持复制（`navigator.clipboard`）与重置（`node/newToken`）。
 - 模型部署/打包、周期任务创建/重跑/停止均已接入真实表单与接口（配合 DAG 训练/打包结果）。
 - DAG 算子配置面板当前以通用 JSON 编辑器（`nodeDef`、`config`）呈现，PSI 模板向导已可按项目节点与数据表一键生成 read_data → PSI 初始图，后续可针对高频算子提供更友好的表单化配置。
+- `secretpad/frontend-src/` 旧前端目录已弃用删除，构建脚本（`scripts/dev-start.sh`、`scripts/run-all-no-docker.sh`、`scripts/clone-repos.sh`）与顶层 README/AGENTS 已统一指向 `secretpad/web/`。
 - 数据表导入当前使用简单的 `name:type` Schema 输入，后续可接入数据源自动拉取元数据。
 - P2P / inst / nodeRoute 等接口的真实后端行为依赖 Kuscia 环境，本地仅保证类型与调用正确，联调需 `scripts1/dev-start.sh` 环境。
 
@@ -226,5 +227,14 @@ corepack pnpm exec playwright test
   - 关联键使用 `ss: [key]` 字符串数组形式。
 - 补充 `shared/lib/i18n/dictionaries.ts` 中 `dag.*` 模板向导相关中英文字典。
 - 验证：类型检查与 lint 通过，无新增错误。
+
+### 7.11 弃用旧前端 frontend-src（Phase 5）
+
+- 删除本地 `secretpad/frontend-src/` 目录（旧 Umi 前端，已不在维护）。
+- 更新 `scripts/clone-repos.sh`：不再从独立 `secretpad-frontend` 仓库克隆旧前端；secretpad 仓库自带新前端 `secretpad/web/`。
+- 更新 `scripts/dev-start.sh`：环境检测、前端依赖安装、启动命令全部切换为 `secretpad/web/` 与 `corepack pnpm --filter @secretpad/app dev`；增加 180s 端口监听 + 30s HTTP 200 二次确认。
+- 更新 `scripts/run-all-no-docker.sh`：无 Docker 模式前端启动同样切换为 `secretpad/web/`。
+- 更新顶层 `README.md` 与 `AGENTS.md`：前端目录、启动命令、架构图统一改为 `secretpad/web/` + Vite，并标注旧前端已弃用删除。
+- 验证：类型检查与 lint 通过；脚本仅通过静态检查（未执行全量启动）。
 
 
