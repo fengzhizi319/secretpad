@@ -1,6 +1,22 @@
 import React from 'react';
 
-// Button Component
+/**
+ * SecretPad 设计系统基础组件库。
+ *
+ * 本文件集中提供跨页面复用的原子组件：Button / Badge / Card / Modal /
+ * Toast / ConfirmDialog。所有组件均：
+ * - 基于 Tailwind 工具类实现，并内置 `dark:` 暗色适配；
+ * - 以受控（controlled）为主，状态由调用方持有；
+ * - 通过 `className` 透传支持自定义扩展。
+ */
+
+/**
+ * Button 按钮。
+ * @property variant 视觉风格：主按钮 / 描边 / 危险 / 幽灵 / 链接。
+ * @property size 尺寸：小 / 中 / 大。
+ * @property icon 前置图标（loading 时会被加载动画替换）。
+ * @property loading 加载中：展示转圈动画并禁用交互。
+ */
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'outline' | 'danger' | 'ghost' | 'link';
   size?: 'sm' | 'md' | 'lg';
@@ -51,6 +67,10 @@ export const Button: React.FC<ButtonProps> = ({
 };
 
 // Badge Component
+/**
+ * Badge 状态徽标。
+ * @property status 状态语义，决定颜色与圆点动画（processing 带脉冲）。
+ */
 export interface BadgeProps {
   status?: 'success' | 'processing' | 'warning' | 'error' | 'default';
   children: React.ReactNode;
@@ -83,6 +103,12 @@ export const Badge: React.FC<BadgeProps> = ({ status = 'default', children, clas
 };
 
 // Card Component
+/**
+ * Card 容器卡片。
+ * @property title 标题栏内容（与 extra 任一存在时渲染标题栏）。
+ * @property extra 标题栏右侧操作区。
+ * @property bodyClassName 内容区自定义类名。
+ */
 export interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   title?: React.ReactNode;
   extra?: React.ReactNode;
@@ -118,6 +144,13 @@ export const Card: React.FC<CardProps> = ({
 };
 
 // Modal Component
+/**
+ * Modal 模态对话框（受控）。
+ * @property isOpen 是否可见，由调用方控制。
+ * @property onClose 关闭回调（点击遮罩右上角 ✕）。
+ * @property footer 底部操作区，传入则渲染。
+ * @property width 宽度类名（默认 max-w-lg）。
+ */
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -247,6 +280,11 @@ export const ToastContainer: React.FC = () => {
 };
 
 // ConfirmDialog Component (based on Modal)
+/**
+ * ConfirmDialog 确认对话框（基于 Modal 封装）。
+ * @property danger 危险操作：确认按钮使用 danger 风格。
+ * @property loading 确认中：禁用取消并令确认按钮加载。
+ */
 export interface ConfirmDialogProps {
   isOpen: boolean;
   title?: React.ReactNode;

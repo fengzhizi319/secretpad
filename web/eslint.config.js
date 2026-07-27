@@ -17,6 +17,8 @@ export default tseslint.config(
       '**/generated/**',
       '**/coverage/**',
       '**/.vite/**',
+      // Storybook 构建产物（静态文档站点），不参与源码 lint。
+      '**/storybook-static/**',
       'packages/api-client/src/generated/**',
     ],
   },

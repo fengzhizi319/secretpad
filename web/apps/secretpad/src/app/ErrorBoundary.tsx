@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '@secretpad/design-system';
+import { captureException } from '../shared/lib/observability';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -24,10 +25,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
-    // Structured log; in production this would be forwarded to Sentry / an
-    // error-report endpoint. Kept synchronous and side-effect free otherwise.
-     
+    // 结构化记录错误；同时转发给可观测性模块（Sentry）。
+    // captureException 在未配置 DSN 时为安全的空操作，不会报错。
     console.error('[ErrorBoundary] Uncaught render error:', error, info.componentStack);
+    captureException(error, { componentStack: info.componentStack });
   }
 
   private reset = (): void => {

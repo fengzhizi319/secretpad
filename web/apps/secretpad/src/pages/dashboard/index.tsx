@@ -143,8 +143,9 @@ export const DashboardPage: React.FC = () => {
                     <div className="text-xs text-gray-500 mt-1 line-clamp-1">{proj.description}</div>
                   </div>
                   <div className="text-right text-xs text-gray-400">
-                    <div>{proj.nodes.length} {t('projects.joinedNodes')}</div>
-                    <div className="text-[11px] text-blue-600 font-medium mt-0.5">{proj.jobCount} Jobs Ran</div>
+                    {/* 防御性取值：后端可能不返回 nodes 字段，避免读取 undefined.length 导致整页崩溃。 */}
+                    <div>{proj.nodes?.length ?? 0} {t('projects.joinedNodes')}</div>
+                    <div className="text-[11px] text-blue-600 font-medium mt-0.5">{proj.jobCount ?? 0} Jobs Ran</div>
                   </div>
                 </div>
               ))}

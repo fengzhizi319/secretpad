@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '../features/auth/model/auth-store';
+import { useThemeStore } from '../shared/lib/theme';
 import { Button } from '@secretpad/design-system';
 import type { Locale } from '../shared/lib/i18n';
 import { useTranslation } from '../shared/lib/i18n';
@@ -10,7 +11,10 @@ export interface AppHeaderProps {
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Console Overview' }) => {
-  const { user, platform, theme, toggleTheme, logout } = useAuthStore();
+  // 认证/用户信息仍来自 auth-store；主题状态已剥离到独立的 theme store。
+  const { user, platform, logout } = useAuthStore();
+  // resolved 为解析后的实际明暗（system 会被解析为 light/dark），用于图标展示。
+  const { resolved, toggle } = useThemeStore();
   const { t, locale, setLocale } = useTranslation();
   const navigate = useNavigate();
 
@@ -38,10 +42,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Console Overview'
         <Button
           size="sm"
           variant="ghost"
-          onClick={toggleTheme}
+          onClick={toggle}
           title="Toggle Theme"
         >
-          {theme === 'light' ? '🌙' : '☀️'}
+          {resolved === 'light' ? '🌙' : '☀️'}
         </Button>
 
         <button

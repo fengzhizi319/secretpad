@@ -1,0 +1,124 @@
+# Copyright 2024 Ant Group Co., Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# =============================================================================
+# SecretPad 新前端（secretpad/web）CI 流水线
+# -----------------------------------------------------------------------------
+# 触发时机：push / PR 到 main 分支，且改动落在 web/ 目录下。
+# 执行内容（按顺序）：
+#   1. install  —— corepack 启用 pnpm 并安装依赖（带 pnpm store 缓存）
+#   2. lint     —— ESLint 9 flat config（0 error 才通过）
+#   3. typecheck—— 全 workspace tsc --noEmit
+#   4. test     —— vitest 单测 + 覆盖率上报
+#   5. build    —— 生产构建（Vite）
+#   6. audit    —— pnpm audit，high/critical 漏洞阻断合并（安全门禁）
+# =============================================================================
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+    # 仅前端目录变更时触发，避免后端改动空跑前端流水线
+    paths:
+      - 'web/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/**'
+
+# 说明： intentionally 不使用 concurrency group 插值 github.ref 等事件字段，
+# 以避免将（潜在受控的）事件负载插入任何表达式（安全扫描要求）。
+# CI 重复运行由 GitHub 默认的队列机制处理。
+
+# 所有步骤默认在 web/ 子目录执行（pnpm workspace 根）
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 质量门禁：lint + typecheck + test + build
+  # ---------------------------------------------------------------------------
+  quality:
+    name: Lint / Typecheck / Test / Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 通过 corepack 使用 package.json 中锁定的 pnpm 版本，保证 CI 与本地一致
+      - name: Enable corepack (pnpm)
+        run: |
+          corepack enable
+          corepack prepare --activate
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      # --frozen-lockfile 确保 CI 严格按锁文件安装，锁文件与 package.json 不一致时直接失败
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (ESLint)
+        run: pnpm run lint
+
+      - name: Typecheck (tsc --noEmit)
+        run: pnpm run typecheck
+
+      # --coverage 输出覆盖率报告，供后续上传/阈值检查使用
+      - name: Unit tests (vitest + coverage)
+        run: pnpm test -- --coverage
+
+      - name: Build (Vite production)
+        run: pnpm run build
+
+      # 上传构建产物，便于人工验收与部署复用
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secretpad-web-dist
+          path: web/apps/secretpad/dist
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 安全门禁：依赖漏洞扫描（high/critical 阻断）
+  # ---------------------------------------------------------------------------
+  security:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable corepack (pnpm)
+        run: |
+          corepack enable
+          corepack prepare --activate
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # audit-level=high：仅 high 与 critical 漏洞导致失败，low/moderate 只告警，
+      # 避免生态中常见的无害告警频繁阻断合并。
+      - name: pnpm audit (block on high/critical)
+        run: pnpm audit --audit-level=high

@@ -8,5 +8,6 @@
     "composite": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.integration.test.ts"]
 }
