@@ -2,12 +2,24 @@ import React, { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Badge, Modal, ConfirmDialog, toast } from '@secretpad/design-system';
-import type { Project, JobExecution } from '@secretpad/api-client';
+import type { Project, JobExecution, ProjectNodeVO, ProjectDatatableBase, ProjectJobVO, GraphNodeOutputVO } from '@secretpad/api-client';
 import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
 
+/**
+ * 项目列表与详情页面。
+ *
+ * 设计要点：
+ * 1. 项目卡片列表支持搜索、创建、编辑、删除；点击进入详情抽屉。
+ * 2. 详情抽屉展示项目基本信息、已加入节点、已关联数据表、近期任务。
+ * 3. 已关联数据表按节点分组展示，支持移除项目中的数据表（调用 project/datatable/delete）。
+ * 4. 任务列表支持查看任务详情弹窗：展示任务下各节点/算子的状态、日志、输出。
+ *    使用 project/job/get 获取完整图状态，再对失败/成功节点调用 task/logs 与 task/output。
+ *    SecretPad 后端任务 ID 约定为 `{jobId}-{graphNodeId}`，因此日志/输出请求均按此规则构造 taskId。
+ * 5. 所有变更操作均通过 TanStack Query mutation + invalidateQueries 刷新相关缓存。
+ */
 export const ProjectsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -20,7 +32,7 @@ export const ProjectsPage: React.FC = () => {
   // New Project Form
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [computeMode, setComputeMode] = useState<'MPC' | 'FL' | 'TEE' | 'HE'>('FL');
+  const [computeMode, setComputeMode] = useState<'MPC' | 'FL' | 'TEE' | 'HE'>('MPC');
 
   // Detail drawer
   const [detailProject, setDetailProject] = useState<Project | null>(null);
@@ -40,6 +52,16 @@ export const ProjectsPage: React.FC = () => {
   const [addTableNodeId, setAddTableNodeId] = useState('');
   const [addTableId, setAddTableId] = useState('');
 
+  // Remove datatable confirm
+  const [removeTableTarget, setRemoveTableTarget] = useState<{ nodeId: string; datatableId: string } | null>(null);
+
+  // Job detail modal
+  const [jobDetailProjectId, setJobDetailProjectId] = useState<string>('');
+  const [jobDetailJobId, setJobDetailJobId] = useState<string>('');
+  // 抽屉中选中的是 graphNodeId；taskId 按后端约定由 jobId + graphNodeId 组合得到。
+  const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string>('');
+  const [taskTab, setTaskTab] = useState<'logs' | 'output'>('logs');
+
   const projectsQuery = useQuery({
     queryKey: ['projects'],
     queryFn: () => apiClient.getProjects(),
@@ -54,6 +76,7 @@ export const ProjectsPage: React.FC = () => {
     queryFn: () => apiClient.getProjectDetail(detailProject!.projectId),
     enabled: !!detailProject,
   });
+  const detailData = detailQuery.data ?? detailProject;
 
   const jobsQuery = useQuery({
     queryKey: ['project-jobs', detailProject?.projectId],
@@ -61,6 +84,40 @@ export const ProjectsPage: React.FC = () => {
     enabled: !!detailProject,
   });
   const jobs: JobExecution[] = jobsQuery.data ?? [];
+
+  // Job detail query
+  const jobDetailQuery = useQuery({
+    queryKey: ['project-job-detail', jobDetailProjectId, jobDetailJobId],
+    queryFn: () => apiClient.getProjectJob(jobDetailProjectId, jobDetailJobId),
+    enabled: !!jobDetailProjectId && !!jobDetailJobId,
+  });
+  const jobDetail: ProjectJobVO | null = jobDetailQuery.data ?? null;
+
+  const selectedTaskId = jobDetailJobId && selectedGraphNodeId ? `${jobDetailJobId}-${selectedGraphNodeId}` : '';
+
+  // Task logs / output queries
+  const taskLogsQuery = useQuery({
+    queryKey: ['project-job-task-logs', jobDetailProjectId, jobDetailJobId, selectedTaskId],
+    queryFn: () => apiClient.getJobTaskLogs({ projectId: jobDetailProjectId, jobId: jobDetailJobId, taskId: selectedTaskId }),
+    enabled: !!jobDetailProjectId && !!jobDetailJobId && !!selectedTaskId && taskTab === 'logs',
+  });
+  const taskOutputQuery = useQuery({
+    queryKey: ['project-job-task-output', jobDetailProjectId, jobDetailJobId, selectedTaskId],
+    queryFn: async () => {
+      // 需要先拿到 graphNodeId 对应的 outputs；ProjectJobVO 的 graph.nodes 中包含 outputs。
+      const graph = jobDetail?.graph;
+      const node = graph?.nodes?.find((n) => n.graphNodeId === selectedGraphNodeId);
+      const outputId = node?.outputs?.[0];
+      if (!outputId || !selectedTaskId) return null;
+      return apiClient.getJobTaskOutput({
+        projectId: jobDetailProjectId,
+        jobId: jobDetailJobId,
+        taskId: selectedTaskId,
+        outputId,
+      });
+    },
+    enabled: !!jobDetailProjectId && !!jobDetailJobId && !!selectedTaskId && taskTab === 'output' && !!jobDetail?.graph,
+  });
 
   // Nodes & datatables for "add" flows
   const nodesQuery = useQuery({
@@ -136,7 +193,23 @@ export const ProjectsPage: React.FC = () => {
     onSuccess: () => {
       setAddTableOpen(false);
       setAddTableId('');
+      queryClient.invalidateQueries({ queryKey: ['project-detail', detailProject?.projectId] });
       toast.success(t('projects.datatableAdded'));
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
+
+  const removeTableMutation = useMutation({
+    mutationFn: () =>
+      apiClient.deleteProjectDatatable({
+        projectId: detailProject!.projectId,
+        nodeId: removeTableTarget!.nodeId,
+        datatableId: removeTableTarget!.datatableId,
+      }),
+    onSuccess: () => {
+      setRemoveTableTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['project-detail', detailProject?.projectId] });
+      toast.success(t('projects.datatableRemoved'));
     },
     onError: (e) => setError(e instanceof Error ? e.message : String(e)),
   });
@@ -169,6 +242,19 @@ export const ProjectsPage: React.FC = () => {
     setAddTableOpen(true);
   };
 
+  const openJobDetail = (projectId: string, jobId: string) => {
+    setJobDetailProjectId(projectId);
+    setJobDetailJobId(jobId);
+    setSelectedGraphNodeId('');
+    setTaskTab('logs');
+  };
+
+  const closeJobDetail = () => {
+    setJobDetailProjectId('');
+    setJobDetailJobId('');
+    setSelectedGraphNodeId('');
+  };
+
   const filteredProjects = projects.filter((p) =>
     (p.projectName || p.name || '').toLowerCase().includes(search.toLowerCase())
   );
@@ -187,6 +273,23 @@ export const ProjectsPage: React.FC = () => {
       default:
         return 'default';
     }
+  };
+
+  const renderTaskOutput = (output?: GraphNodeOutputVO | null) => {
+    if (!output) return <div className="text-gray-400">{t('projects.noOutput')}</div>;
+    if (output.type === 'table' && output.meta && Array.isArray(output.meta.rows)) {
+      return (
+        <div className="space-y-2">
+          <div className="font-mono text-[10px] text-gray-500">type: {output.type} · codeName: {output.codeName}</div>
+          {output.meta.rows.map((row: Record<string, unknown>, idx: number) => (
+            <div key={idx} className="p-2 rounded bg-gray-50 dark:bg-gray-800 font-mono text-[10px]">
+              {Object.entries(row).map(([k, v]) => `${k}=${String(v)}`).join(' · ')}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return <pre className="text-[10px] font-mono bg-gray-50 dark:bg-gray-800 p-2 rounded overflow-auto">{JSON.stringify(output, null, 2)}</pre>;
   };
 
   return (
@@ -290,11 +393,11 @@ export const ProjectsPage: React.FC = () => {
             <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">{t('projects.modeLabel')}</label>
             <select
               value={computeMode}
-              onChange={(e) => setComputeMode(e.target.value as any)}
+              onChange={(e) => setComputeMode(e.target.value as 'MPC' | 'FL' | 'TEE' | 'HE')}
               className="w-full p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500"
             >
-              <option value="FL">{t('projects.modeFL')}</option>
               <option value="MPC">{t('projects.modeMPC')}</option>
+              <option value="FL">{t('projects.modeFL')}</option>
               <option value="TEE">{t('projects.modeTEE')}</option>
               <option value="HE">{t('projects.modeHE')}</option>
             </select>
@@ -355,7 +458,7 @@ export const ProjectsPage: React.FC = () => {
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                  {detailQuery.data?.projectName || detailProject.projectName}
+                  {detailData?.projectName || detailProject.projectName}
                 </h3>
                 <p className="text-xs text-gray-500 font-mono mt-1">{detailProject.projectId}</p>
               </div>
@@ -365,11 +468,11 @@ export const ProjectsPage: React.FC = () => {
             <div className="text-xs space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-gray-500">{t('projects.modeLabel')}:</span>
-                <span className="font-mono font-semibold">{detailQuery.data?.computeMode || detailProject.computeMode}</span>
+                <span className="font-mono font-semibold">{detailData?.computeMode || detailProject.computeMode}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-gray-500">{t('projects.descLabel')}:</span>
-                <span>{detailQuery.data?.description || detailProject.description || t('projects.noDescription')}</span>
+                <span>{detailData?.description || detailProject.description || t('projects.noDescription')}</span>
               </div>
             </div>
 
@@ -382,22 +485,56 @@ export const ProjectsPage: React.FC = () => {
                 </AccessGuard>
               </div>
               <div className="flex flex-wrap gap-2">
-                {(detailQuery.data?.nodes || detailProject.nodes).map((n) => (
+                {(detailData?.nodes || detailProject.nodes || []).map((n) => (
                   <Badge key={n.nodeId} status="default">{n.nodeName || n.nodeId}</Badge>
                 ))}
-                {(detailQuery.data?.nodes || detailProject.nodes).length === 0 && (
+                {(detailData?.nodes || detailProject.nodes || []).length === 0 && (
                   <span className="text-xs text-gray-400">-</span>
                 )}
+              </div>
+            </div>
+
+            {/* Project datatables */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{t('projects.datatables')}</h4>
+                <AccessGuard access={{ types: [Platform.CENTER] }}>
+                  <Button size="sm" variant="outline" onClick={openAddTable}>＋ {t('projects.addDatatable')}</Button>
+                </AccessGuard>
+              </div>
+              <div className="space-y-3">
+                {(detailData?.nodes || detailProject.nodes || []).map((node: ProjectNodeVO) => (
+                  <div key={node.nodeId}>
+                    <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">{node.nodeName || node.nodeId}</div>
+                    {(node.datatables || []).length === 0 ? (
+                      <div className="text-xs text-gray-400 pl-2">-</div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {(node.datatables || []).map((tbl: ProjectDatatableBase) => (
+                          <Badge key={tbl.datatableId} status="default" className="flex items-center gap-1.5">
+                            <span>{tbl.datatableName || tbl.datatableId}</span>
+                            <AccessGuard access={{ types: [Platform.CENTER] }}>
+                              <button
+                                className="text-gray-400 hover:text-red-500"
+                                onClick={() => setRemoveTableTarget({ nodeId: node.nodeId || '', datatableId: tbl.datatableId || '' })}
+                                title={t('projects.removeDatatable')}
+                              >
+                                ✕
+                              </button>
+                            </AccessGuard>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{t('projects.jobs')}</h4>
               <AccessGuard access={{ types: [Platform.CENTER] }}>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={openAddTable}>＋ {t('projects.addDatatable')}</Button>
-                  <Button size="sm" variant="primary" onClick={() => navigate({ to: '/dag' })}>{t('projects.openDag')}</Button>
-                </div>
+                <Button size="sm" variant="primary" onClick={() => navigate({ to: '/dag' })}>{t('projects.openDag')}</Button>
               </AccessGuard>
             </div>
 
@@ -407,7 +544,7 @@ export const ProjectsPage: React.FC = () => {
                 <div className="text-xs text-gray-400 text-center py-4">{t('projects.noJobs')}</div>
               )}
               {jobs.map((job) => (
-                <div key={job.jobId} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-800 text-xs">
+                <div key={job.jobId} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-800 text-xs hover:border-blue-500/40 transition-colors cursor-pointer" onClick={() => openJobDetail(detailProject.projectId, job.jobId)}>
                   <div className="min-w-0">
                     <div className="font-semibold text-gray-800 dark:text-gray-200 truncate">{job.name || job.jobId}</div>
                     <div className="text-gray-400 mt-0.5 font-mono">{job.createTime} {job.duration ? `· ${job.duration}` : ''}</div>
@@ -416,7 +553,7 @@ export const ProjectsPage: React.FC = () => {
                     <Badge status={jobStatusBadge(job.status)}>{job.status}</Badge>
                     {job.status === 'RUNNING' && (
                       <AccessGuard access={{ types: [Platform.CENTER] }}>
-                        <Button size="sm" variant="danger" loading={stopJobMutation.isPending} onClick={() => stopJobMutation.mutate(job)}>
+                        <Button size="sm" variant="danger" loading={stopJobMutation.isPending} onClick={(e) => { e.stopPropagation(); stopJobMutation.mutate(job); }}>
                           {t('projects.stopJob')}
                         </Button>
                       </AccessGuard>
@@ -428,6 +565,91 @@ export const ProjectsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Job Detail Modal */}
+      <Modal
+        isOpen={!!jobDetailProjectId && !!jobDetailJobId}
+        onClose={closeJobDetail}
+        title={t('projects.jobDetail')}
+        footer={<Button variant="primary" onClick={closeJobDetail}>{t('common.close')}</Button>}
+      >
+        <div className="text-xs space-y-4">
+          {jobDetailQuery.isLoading && <div className="text-gray-400">{t('common.loading')}</div>}
+          {jobDetailQuery.error && <div className="text-red-500">{t('common.error', { message: jobDetailQuery.error.message })}</div>}
+          {jobDetail && (
+            <>
+              <div className="flex items-center gap-3">
+                <span className="text-gray-500">ID:</span>
+                <span className="font-mono">{jobDetail.jobId}</span>
+                <Badge status={jobStatusBadge(jobDetail.status || '')}>{jobDetail.status}</Badge>
+              </div>
+              {jobDetail.errMsg && <div className="text-red-500 bg-red-50 dark:bg-red-950/30 p-2 rounded">{jobDetail.errMsg}</div>}
+
+              <div>
+                <h5 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('projects.jobTasks')}</h5>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {(jobDetail.graph?.nodes || []).length === 0 && (
+                    <div className="text-gray-400">{t('projects.noTasks')}</div>
+                  )}
+                  {(jobDetail.graph?.nodes || []).map((n) => (
+                    <div
+                      key={n.graphNodeId}
+                      onClick={() => setSelectedGraphNodeId(n.graphNodeId || '')}
+                      className={`p-2 rounded-lg border cursor-pointer transition-colors ${
+                        selectedGraphNodeId === n.graphNodeId ? 'border-blue-500 bg-blue-50/30 dark:bg-blue-950/20' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{n.label || n.codeName}</span>
+                        <Badge status={jobStatusBadge(n.status || '')}>{n.status}</Badge>
+                      </div>
+                      <div className="text-[10px] text-gray-400 font-mono mt-0.5">{n.graphNodeId}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {selectedGraphNodeId && (
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <button
+                      className={`font-semibold ${taskTab === 'logs' ? 'text-blue-600' : 'text-gray-500'}`}
+                      onClick={() => setTaskTab('logs')}
+                    >
+                      {t('dag.logs')}
+                    </button>
+                    <button
+                      className={`font-semibold ${taskTab === 'output' ? 'text-blue-600' : 'text-gray-500'}`}
+                      onClick={() => setTaskTab('output')}
+                    >
+                      {t('dag.output')}
+                    </button>
+                  </div>
+                  {taskTab === 'logs' && (
+                    <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800 h-48 overflow-y-auto font-mono text-[10px] text-gray-700 dark:text-gray-300">
+                      {taskLogsQuery.isLoading && <div className="text-gray-400">{t('common.loading')}</div>}
+                      {taskLogsQuery.error && <div className="text-red-500">{taskLogsQuery.error.message}</div>}
+                      {(taskLogsQuery.data?.logs || []).length === 0 && !taskLogsQuery.isLoading && (
+                        <div className="text-gray-400">{t('dag.noLogs')}</div>
+                      )}
+                      {(taskLogsQuery.data?.logs || []).map((line, idx) => (
+                        <div key={idx} className="whitespace-pre-wrap">{line}</div>
+                      ))}
+                    </div>
+                  )}
+                  {taskTab === 'output' && (
+                    <div className="h-48 overflow-y-auto">
+                      {taskOutputQuery.isLoading && <div className="text-gray-400">{t('common.loading')}</div>}
+                      {taskOutputQuery.error && <div className="text-red-500">{taskOutputQuery.error.message}</div>}
+                      {renderTaskOutput(taskOutputQuery.data ?? null)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </Modal>
 
       {/* Add Node Modal */}
       <Modal
@@ -496,6 +718,19 @@ export const ProjectsPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Remove Datatable Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={!!removeTableTarget}
+        title={t('projects.removeDatatable')}
+        message={t('projects.removeDatatableConfirm')}
+        danger
+        loading={removeTableMutation.isPending}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => removeTableTarget && removeTableMutation.mutate()}
+        onCancel={() => setRemoveTableTarget(null)}
+      />
 
       {/* Delete Confirm Dialog */}
       <ConfirmDialog

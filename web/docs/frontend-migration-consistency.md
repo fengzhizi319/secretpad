@@ -170,4 +170,15 @@ corepack pnpm exec playwright test
   - 端口监听超时从 120s 延长到 180s。
   - 端口就绪后增加 `curl -f http://127.0.0.1:8000/` HTTP 200 二次确认，避免 Vite 已 bind 端口但尚未完成初始构建时误报“前端未就绪”。
 
+### 7.6 Projects 页面增强（2026-07-27 后续）
+
+- 重写 `pages/projects/index.tsx`：
+  - 项目卡片列表保留搜索、创建、编辑、删除。
+  - 点击卡片打开详情抽屉：展示基本信息、已加入节点、按节点分组的已关联数据表、近期任务。
+  - 支持在抽屉中直接添加节点、添加数据表、从项目移除数据表（调用 `project/datatable/delete`）。
+  - 支持查看任务详情弹窗：列出任务下所有图节点/算子状态，点击节点可查看日志与输出。
+- 任务 `taskId` 按后端约定由 `jobId-graphNodeId` 组合得到，用于调用 `project/job/task/logs` 与 `project/job/task/output`。
+- 补充 `shared/lib/i18n/dictionaries.ts` 中 Projects 相关文案，覆盖中英双语。
+- 验证：类型检查与 lint 通过，无新增错误。
+
 
