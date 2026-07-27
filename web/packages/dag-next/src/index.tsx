@@ -35,6 +35,13 @@ export interface DAGComponentDef {
   icon?: string;
 }
 
+interface ComponentMetadata {
+  desc?: string;
+  inputs?: Array<{ name?: string; type?: string; desc?: string }>;
+  outputs?: Array<{ name?: string; type?: string; desc?: string }>;
+  attrs?: Array<Record<string, unknown>>;
+}
+
 export interface DAGCanvasProps {
   title?: string;
   initialNodes?: DAGNode[];
@@ -77,6 +84,7 @@ export interface DAGCanvasProps {
   onNodeConfigChange?: (node: DAGNode) => void | Promise<void>;
   onNodeLogs?: (node: DAGNode) => Promise<string[] | { status?: string; logs?: string[] }>;
   onNodeOutput?: (node: DAGNode) => Promise<Record<string, any> | null>;
+  onGetComponentDef?: (node: DAGNode) => Promise<ComponentMetadata | null>;
   onSaveGraph?: (nodes: DAGNode[], edges: DAGEdge[]) => void | Promise<void>;
   onRunGraph?: (nodes: DAGNode[], edges: DAGEdge[]) => void | Promise<void>;
   onAddNode?: (component: DAGComponentDef) => DAGNode | Promise<DAGNode>;
@@ -117,6 +125,59 @@ function safeJsonParse(value: string, fallback: Record<string, any> = {}): Recor
   }
 }
 
+function renderOutput(output: Record<string, any> | null, noOutputLabel = 'No output'): React.ReactNode {
+  if (!output) return <span className="text-gray-500">{noOutputLabel}</span>;
+  if (output.type === 'table' && output.meta && Array.isArray(output.meta.rows)) {
+    const rows = output.meta.rows as Record<string, unknown>[];
+    const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+    return (
+      <div className="space-y-2">
+        <div className="text-gray-400 text-[10px]">type: {output.type} · codeName: {output.codeName}</div>
+        <div className="overflow-auto">
+          <table className="w-full text-left text-[10px] border border-gray-800">
+            <thead className="bg-gray-900 text-gray-400">
+              <tr>
+                {columns.map((col) => (
+                  <th key={col} className="p-2 border-b border-gray-800">{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, idx) => (
+                <tr key={idx} className="border-b border-gray-800 last:border-0">
+                  {columns.map((col) => (
+                    <td key={col} className="p-2 text-gray-300">{String(row[col] ?? '')}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+  if (output.tabs && typeof output.tabs === 'object') {
+    const tabs = Object.entries(output.tabs as Record<string, unknown>);
+    return (
+      <div className="space-y-3">
+        {tabs.map(([name, content]) => (
+          <div key={name}>
+            <div className="text-gray-400 text-[10px] mb-1">{name}</div>
+            <div className="p-2 rounded bg-gray-900 border border-gray-800 font-mono text-[10px] text-gray-300 overflow-auto whitespace-pre-wrap">
+              {typeof content === 'string' ? content : safeJsonStringify(content)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <pre className="p-2 rounded bg-gray-900 border border-gray-800 font-mono text-[10px] text-gray-300 h-96 overflow-auto whitespace-pre-wrap">
+      {safeJsonStringify(output)}
+    </pre>
+  );
+}
+
 export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
   title = 'DAG Pipeline Editor',
   initialNodes = [],
@@ -131,6 +192,7 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
   onNodeConfigChange,
   onNodeLogs,
   onNodeOutput,
+  onGetComponentDef,
   onSaveGraph,
   onRunGraph,
   onAddNode,
@@ -147,6 +209,7 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
   const [logs, setLogs] = useState<{ status?: string; logs: string[] }>({ logs: [] });
   const [output, setOutput] = useState<Record<string, any> | null>(null);
+  const [componentDef, setComponentDef] = useState<ComponentMetadata | null>(null);
   const [panelLoading, setPanelLoading] = useState(false);
   const [pendingConnection, setPendingConnection] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -159,6 +222,24 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
   useEffect(() => {
     setEdges(initialEdges);
   }, [initialEdges]);
+
+  useEffect(() => {
+    if (!selectedNode || !onGetComponentDef) {
+      setComponentDef(null);
+      return;
+    }
+    let cancelled = false;
+    onGetComponentDef(selectedNode)
+      .then((def) => {
+        if (!cancelled) setComponentDef(def);
+      })
+      .catch(() => {
+        if (!cancelled) setComponentDef(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedNode, onGetComponentDef]);
 
   useEffect(() => {
     if (!selectedNode) return;
@@ -637,6 +718,38 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
                     </div>
                   </div>
 
+                  {componentDef && (
+                    <div className="p-3 rounded bg-gray-900 border border-gray-800 space-y-2">
+                      {componentDef.desc && (
+                        <div className="text-gray-400 text-[10px] leading-relaxed">{componentDef.desc}</div>
+                      )}
+                      {componentDef.inputs && componentDef.inputs.length > 0 && (
+                        <div>
+                          <div className="text-gray-500 text-[10px] font-semibold mb-1">Inputs</div>
+                          <div className="text-gray-400 text-[10px] font-mono truncate">
+                            {componentDef.inputs.map((i, idx) => i.name || `input-${idx}`).join(', ')}
+                          </div>
+                        </div>
+                      )}
+                      {componentDef.outputs && componentDef.outputs.length > 0 && (
+                        <div>
+                          <div className="text-gray-500 text-[10px] font-semibold mb-1">Outputs</div>
+                          <div className="text-gray-400 text-[10px] font-mono truncate">
+                            {componentDef.outputs.map((o, idx) => o.name || `output-${idx}`).join(', ')}
+                          </div>
+                        </div>
+                      )}
+                      {componentDef.attrs && componentDef.attrs.length > 0 && (
+                        <div>
+                          <div className="text-gray-500 text-[10px] font-semibold mb-1">Attributes ({componentDef.attrs.length})</div>
+                          <div className="p-2 rounded bg-gray-950 border border-gray-800 font-mono text-[10px] text-gray-400 overflow-auto max-h-24">
+                            {safeJsonStringify(componentDef.attrs)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div>
                     <label className="text-gray-400 block mb-1">{labels.executionStatus ?? 'Execution Status'}</label>
                     <Badge status={getStatusBadge(selectedNode.status).status}>
@@ -712,7 +825,7 @@ export const DAGNextWorkspace: React.FC<DAGCanvasProps> = ({
                     </Button>
                   </div>
                   <div className="p-2 rounded bg-gray-900 border border-gray-800 font-mono text-[10px] text-gray-300 h-96 overflow-auto whitespace-pre-wrap">
-                    {output ? safeJsonStringify(output) : (labels.noOutput ?? 'No output')}
+                    {renderOutput(output, labels.noOutput)}
                   </div>
                 </div>
               )}

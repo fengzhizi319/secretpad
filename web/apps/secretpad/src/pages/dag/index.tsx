@@ -335,6 +335,24 @@ export const DAGPage: React.FC = () => {
     }
   };
 
+  const handleGetComponentDef = async (node: DAGNode) => {
+    if (!node.codeName) return null;
+    const { domain, name } = normalizeCodeName(node.codeName);
+    try {
+      const defs = await apiClient.batchGetComponent([{ domain, name }]);
+      const def = (defs[node.codeName] || Object.values(defs)[0]) ?? null;
+      if (!def) return null;
+      return {
+        desc: def.desc,
+        inputs: (def.inputs || []).map((item) => ({ name: (item as { name?: string }).name })),
+        outputs: (def.outputs || []).map((item) => ({ name: (item as { name?: string }).name })),
+        attrs: def.attrs as Array<Record<string, unknown>> | undefined,
+      };
+    } catch {
+      return null;
+    }
+  };
+
   const handleAddNode = async (component: DAGComponentDef): Promise<DAGNode> => {
     const codeName = `${component.domain}/${component.name}`;
     const label = i18nMap[component.name] || i18nMap[codeName] || component.name;
@@ -465,7 +483,7 @@ export const DAGPage: React.FC = () => {
 
       <div className="flex-1 min-h-0">
         {selectedGraph ? (
-          <AccessGuard access={{ types: [Platform.CENTER] }} fallback={<DAGNextWorkspace readOnly title={selectedGraph.name} initialNodes={nodes} initialEdges={edges} labels={dagLabels} />}>
+          <AccessGuard access={{ types: [Platform.CENTER] }} fallback={<DAGNextWorkspace readOnly title={selectedGraph.name} initialNodes={nodes} initialEdges={edges} labels={dagLabels} onGetComponentDef={handleGetComponentDef} />}>
             <DAGNextWorkspace
               title={selectedGraph.name}
               initialNodes={nodes}
@@ -480,6 +498,7 @@ export const DAGPage: React.FC = () => {
               onNodeOutput={handleNodeOutput}
               onAddNode={handleAddNode}
               onConnect={handleConnect}
+              onGetComponentDef={handleGetComponentDef}
               loading={loading}
               labels={dagLabels}
             />

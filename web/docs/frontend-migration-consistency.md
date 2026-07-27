@@ -207,4 +207,13 @@ corepack pnpm exec playwright test
 - 补充中英双语字典 `nodes.*`（detail / basicInfo / deployToken / nodeResults / embedded 等）。
 - 验证：类型检查与 lint 通过，无新增错误。
 
+### 7.9 DAG 复杂组件迁移（Phase 4 进行中）
+
+- 增强 `packages/dag-next/src/index.tsx`：
+  - **算子配置面板**：选中节点时通过 `onGetComponentDef` 回调拉取组件定义（`component/batch`），展示算子描述、Inputs/Outputs、Attributes 摘要，辅助用户填写 `nodeDef` / `config` JSON。
+  - **结果可视化**：输出面板识别 `type === 'table'` 且 `meta.rows` 为数组时，以 HTML 表格形式展示数据；支持 `tabs` 分栏展示；其余类型仍使用 JSON 高亮。
+- 在 `pages/dag/index.tsx` 中实现 `handleGetComponentDef`：按 `codeName` 解析 domain/name，调用 `apiClient.batchGetComponent` 并映射为 `ComponentMetadata`。
+- 类型检查与 lint 通过，无新增错误。
+- 待完成：PSI / LR 模板向导，从旧前端 `pipeline-template-psi.ts` / `pipeline-template-sanitization.ts` 迁移。
+
 
