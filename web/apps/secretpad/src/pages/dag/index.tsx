@@ -15,6 +15,7 @@ import { useTranslation } from '../../shared/lib/i18n';
 import { AccessGuard } from '../../features/auth/ui/access-guard';
 import { Platform } from '../../shared/lib/platform';
 import { useTemplateWizard, TemplateWizard } from '../../features/dag-templates';
+import { ModelPackModal } from '../../features/model-pack';
 
 function normalizeCodeName(codeName?: string): { domain: string; name: string } {
   if (!codeName) return { domain: 'unknown', name: 'unknown' };
@@ -106,6 +107,8 @@ export const DAGPage: React.FC = () => {
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [deleteGraphTarget, setDeleteGraphTarget] = useState<GraphMetaVO | null>(null);
+  const [selectedNode, setSelectedNode] = useState<DAGNode | null>(null);
+  const [isPackModalOpen, setIsPackModalOpen] = useState(false);
 
   const dagLabels = useMemo(
     () => ({
@@ -479,6 +482,15 @@ export const DAGPage: React.FC = () => {
             >
               {t('dag.template')}
             </Button>
+            {selectedNode && selectedNode.status === 'Success' && (selectedNode.codeName || '').includes('train') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsPackModalOpen(true)}
+              >
+                {t('dag.packModel')}
+              </Button>
+            )}
             {hasRunningNodes && (
               <Button variant="outline" size="sm" loading={stopGraphMutation.isPending} onClick={() => stopGraphMutation.mutate()}>
                 ⏹ {t('dag.stop')}
@@ -514,6 +526,7 @@ export const DAGPage: React.FC = () => {
               onNodeConfigChange={handleNodeConfigChange}
               onNodeLogs={handleNodeLogs}
               onNodeOutput={handleNodeOutput}
+              onNodeSelect={setSelectedNode}
               onAddNode={handleAddNode}
               onConnect={handleConnect}
               onGetComponentDef={handleGetComponentDef}
@@ -625,6 +638,21 @@ export const DAGPage: React.FC = () => {
 
       {/* DAG Template Wizard */}
       <TemplateWizard project={selectedProject} {...templateWizard} />
+
+      {/* DAG Model Pack Modal */}
+      {selectedNode && selectedGraph && (
+        <ModelPackModal
+          isOpen={isPackModalOpen}
+          onClose={() => setIsPackModalOpen(false)}
+          projectId={selectedProjectId}
+          graphId={selectedGraph.graphId || ''}
+          trainNode={selectedNode}
+          onPacked={() => {
+            setIsPackModalOpen(false);
+            toast.success(t('models.packSuccess'));
+          }}
+        />
+      )}
     </div>
   );
 };

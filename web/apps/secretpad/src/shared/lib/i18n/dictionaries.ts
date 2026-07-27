@@ -332,6 +332,8 @@ const zh: Dictionary = {
     partyDataSources: '模型参与方数据源',
     loadingPartyPath: '正在加载参与方数据源...',
     partyPathError: '加载参与方路径失败：{{message}}',
+    packFromDagTitle: '打包模型',
+    trainNode: '训练节点',
   },
   messages: {
     title: '消息与审批中心',
@@ -447,6 +449,7 @@ const zh: Dictionary = {
     createFromTemplate: '创建模板图',
     templateHint: '选择模板并填写必要参数，自动生成初始 DAG。',
     templateCreated: '模板图已创建',
+    packModel: '打包模型',
     selectNode: '选择节点',
     selectTable: '选择数据表',
     selectKey: '选择关联键',
@@ -881,6 +884,8 @@ const en: Dictionary = {
     partyDataSources: 'Model Party Data Sources',
     loadingPartyPath: 'Loading party data sources...',
     partyPathError: 'Failed to load party path: {{message}}',
+    packFromDagTitle: 'Pack Model',
+    trainNode: 'Train Node',
   },
   messages: {
     title: 'Message & Approval Center',
@@ -949,6 +954,7 @@ const en: Dictionary = {
     emptyCanvas: 'Canvas is empty. Add operators from the library on the left.',
     stop: 'Stop',
     stopSuccess: 'Stop command sent',
+    packModel: 'Pack Model',
     rename: 'Rename',
     renameTitle: 'Rename DAG Graph',
     renameSuccess: 'Renamed successfully',
