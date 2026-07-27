@@ -122,7 +122,7 @@ corepack pnpm exec playwright test
 - 数据表分级（classification）改为读取后端真实字段，导入表单支持 L1–L5 选择并透传后端，不再硬编码 `'L1'`。
 - 节点 Token 弹窗已支持复制（`navigator.clipboard`）与重置（`node/newToken`）。
 - 模型部署/打包、周期任务创建/重跑/停止均已接入真实表单与接口（配合 DAG 训练/打包结果）。
-- DAG 算子配置面板当前以通用 JSON 编辑器（`nodeDef`、`config`）呈现，后续可针对高频算子提供更友好的表单化配置。
+- DAG 算子配置面板当前以通用 JSON 编辑器（`nodeDef`、`config`）呈现，PSI 模板向导已可按项目节点与数据表一键生成 read_data → PSI 初始图，后续可针对高频算子提供更友好的表单化配置。
 - 数据表导入当前使用简单的 `name:type` Schema 输入，后续可接入数据源自动拉取元数据。
 - P2P / inst / nodeRoute 等接口的真实后端行为依赖 Kuscia 环境，本地仅保证类型与调用正确，联调需 `scripts1/dev-start.sh` 环境。
 
@@ -215,5 +215,16 @@ corepack pnpm exec playwright test
 - 在 `pages/dag/index.tsx` 中实现 `handleGetComponentDef`：按 `codeName` 解析 domain/name，调用 `apiClient.batchGetComponent` 并映射为 `ComponentMetadata`。
 - 类型检查与 lint 通过，无新增错误。
 - 待完成：PSI / LR 模板向导，从旧前端 `pipeline-template-psi.ts` / `pipeline-template-sanitization.ts` 迁移。
+
+### 7.10 DAG PSI 模板向导（Phase 4.2）
+
+- 在 `pages/dag/index.tsx` 增加“PSI 模板”按钮与向导弹窗：
+  - 选择接收方节点、数据表、关联键；选择发送方节点、数据表、关联键。
+  - 向导内部调用 `graph/create` 创建空图，再调用 `graph/update` 写入两个 `read_data/datatable` 节点与 `data_prep/psi` 节点及两条边。
+  - `read_data` 节点使用 `datatable_selected` 属性 `{ s: tableId, is_na: false }`。
+  - `psi` 节点属性严格按旧前端 `pipeline-template-psi.ts` 顺序构造：`input/input_ds1/keys`、`input/input_ds2/keys`、`protocol`（`PROTOCOL_RR22`）、`sort_result`（true）、`receiver_parties`（双方 nodeId）、`allow_empty_result`（na）、`join_type`（`inner_join`）、`input_ds1_keys_duplicated`（true）、`input_ds2_keys_duplicated`（true）。
+  - 关联键使用 `ss: [key]` 字符串数组形式。
+- 补充 `shared/lib/i18n/dictionaries.ts` 中 `dag.*` 模板向导相关中英文字典。
+- 验证：类型检查与 lint 通过，无新增错误。
 
 
