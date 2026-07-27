@@ -27,6 +27,7 @@ const DataSourcesPage = lazyPage(() => import('./pages/data-sources'), 'DataSour
 const DataSourceDetailPage = lazyPage(() => import('./pages/data-sources/detail'), 'DataSourceDetailPage');
 const DAGPage = lazyPage(() => import('./pages/dag'), 'DAGPage');
 const ModelsPage = lazyPage(() => import('./pages/models'), 'ModelsPage');
+const ResultsPage = lazyPage(() => import('./pages/results'), 'ResultsPage');
 const PeriodicTasksPage = lazyPage(() => import('./pages/periodic-tasks'), 'PeriodicTasksPage');
 const MessagesPage = lazyPage(() => import('./pages/messages'), 'MessagesPage');
 const NodeRoutesPage = lazyPage(() => import('./pages/node-routes'), 'NodeRoutesPage');
@@ -211,6 +212,12 @@ export const modelsRoute = createRoute({
   component: ModelsPage,
 });
 
+export const resultsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/results',
+  component: ResultsPage,
+});
+
 export const periodicTasksRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/periodic-tasks',
@@ -265,6 +272,7 @@ const routeTree = rootRoute.addChildren([
     dataSourceDetailRoute,
     dagRoute,
     modelsRoute,
+    resultsRoute,
     periodicTasksRoute,
     messagesRoute,
     nodeRoutesRoute,

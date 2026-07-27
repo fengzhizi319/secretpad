@@ -38,6 +38,8 @@ export const AppLayout: React.FC = () => {
         return t('sidebar.dag');
       case '/models':
         return t('sidebar.models');
+      case '/results':
+        return t('sidebar.results');
       case '/periodic-tasks':
         return t('sidebar.periodicTasks');
       case '/messages':

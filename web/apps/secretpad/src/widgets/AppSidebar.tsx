@@ -38,6 +38,7 @@ export const AppSidebar: React.FC = () => {
         { path: '/institutions', label: t('sidebar.institutions'), icon: '🏢' },
         { section: t('sidebar.governance') },
         { path: '/models', label: t('sidebar.models'), icon: '🤖' },
+        { path: '/results', label: t('sidebar.results'), icon: '📦' },
         { path: '/periodic-tasks', label: t('sidebar.periodicTasks'), icon: '⏰' },
         { path: '/messages', label: t('sidebar.messages'), icon: '🔔' },
         { path: '/account', label: t('sidebar.account'), icon: '👤' },

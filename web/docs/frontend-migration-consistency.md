@@ -243,6 +243,17 @@ corepack pnpm exec playwright test
   - `bash -n scripts/dev-start.sh scripts/dev-stop.sh scripts1/dev-start.sh scripts1/dev-stop.sh` 通过。
   - 执行完整 `bash scripts1/dev-start.sh`：后端 HTTP 8080、前端 8000 首页均返回 200；`POST /api/login` 成功返回 token；`POST /api/v1alpha1/node/list` 成功返回 alice/bob 节点；执行 `bash scripts1/dev-stop.sh` 后 8000/8080/8443 端口全部释放。
 
+### 7.12 结果管理独立页（Phase 7）
+
+- 新增 `pages/results/index.tsx`：
+  - 调用 `apiClient.listNodeResults` 跨项目拉取节点产物列表，支持 `nameFilter` 搜索、`kindFilters` 类型筛选、`timeSortingRule` 时间排序、分页。
+  - 列表字段：结果名称、所属节点、类型（table/report/rule/model）、来源项目、计算模式、TEE 拉取状态、创建时间。
+  - 点击“下载”调用 `apiClient.downloadData` 触发浏览器下载（非报告类结果）。
+  - 点击“详情”打开 Modal，调用 `apiClient.getNodeResultDetail` 展示结果元数据与 `output` 摘要。
+- 新增 `/results` 路由（`router.tsx`），并在 `AppSidebar` / `AppLayout` 中增加侧边栏入口与标题。
+- 补充 `i18n/dictionaries.ts` 的 `results` 命名空间与 `sidebar.results` 键值。
+- 验证：`corepack pnpm --filter @secretpad/app typecheck` 与 `corepack pnpm run lint` 通过（0 errors）。
+
 
 
 ## 8. 迁移完成度总结与剩余功能清单
@@ -372,7 +383,7 @@ corepack pnpm exec playwright test
 | 机构管理 | `inst` | `pages/institutions` | ✅ 已迁移 | 机构节点增删改查。 |
 | EDGE 模式首页 | `new-node` | 无独立页面 | ❌ 未迁移 | 旧 `/node` 为 EDGE 节点首页，新前端未提供等效首页。 |
 | EDGE / P2P 工作台 | `edge`, `p2p-workbench` | 无独立页面 | ❌ 未迁移 | 旧 `/edge` 聚合工作台、合作节点、我的项目、结果管理等标签；新前端按独立路由拆分，缺少聚合工作台。 |
-| 结果管理独立页 | `result-manager` | 无独立页面 | ❌ 未迁移 | 新前端仅通过项目详情 / DAG 节点查看结果，缺少统一结果管理入口。 |
+| 结果管理独立页 | `result-manager` / `pipeline-record-list` | `pages/results` | ✅ 已迁移 | 跨项目列表、搜索、类型筛选、排序、分页、下载、详情。批量删除旧前端未完全实现，暂不迁移。 |
 | 隐私组件场景 | `privacy-scenes` | 无独立页面 | ❌ 未迁移 | 旧前端用于展示场景模板并快速创建项目；新前端无等效页面。 |
 | 新用户引导 | `guide`, `guide-pipeline`, `guide-node`, `guide-tour`, `dag-guide-tour`, `dag-record-guide-tour` | 无 | ❌ 未迁移 | 首次使用引导、DAG 操作引导均未实现。 |
 | DAG 模板向导 | `pipeline` | `features/dag-templates` + `pages/dag` | ✅ 已迁移 | 已迁移 blank/psi/data-classification/sanitization/k-anonymity/l-diversity/local-differential-privacy/differential-privacy/query-obfuscation/risk/tee 共 11 个模板；向导按 basic/privacy/ml 分类展示。 |
@@ -399,9 +410,10 @@ corepack pnpm exec playwright test
    - 实现方式：每个模板为纯函数 `TemplateContribution.build(...)`，统一在 `registry.ts` 注册；`TemplateWizard` 按 basic/privacy/ml 分类展示，根据模板类型动态渲染双表/单表/无参数表单；创建时先调用 `createGraph` 获取 graphId，再调用 `template.build` 生成节点/边，最后 `updateGraph` 提交完整拓扑。
    - 剩余模板（引导式向导、场景 PSI、TEE PSI 等）因与现有模板拓扑等效或属于体验增强，归入 P1/P2 按需迁移。
 
-2. **结果管理独立页面**（`pages/records` 或 `pages/results`）
-   - 旧模块：`result-manager`、`result-details`、`pipeline-record-list`。
-   - 建议：复用 `Project`/`Graph` 查询接口，提供跨项目的运行记录列表、结果报告、批量删除、下载。
+2. **结果管理独立页面**（`pages/results`） ✅ 已完成
+   - 旧模块：`result-manager`、`pipeline-record-list`。
+   - 新前端：新增 `/results` 路由与侧边栏入口，调用 `node/result/list`、`node/result/detail`、`data/download`。
+   - 支持搜索、按类型（table/report/rule/model）筛选、时间排序、分页、下载、详情弹窗。批量删除旧前端未完全实现，暂不迁移。
 
 3. **DAG 模型提交入口**（`pages/dag` 右侧面板）
    - 旧模块：`dag-model-submission`（`SubmissionDrawer`、`PipelineTitleComponent`）。
@@ -468,6 +480,6 @@ corepack pnpm exec playwright test
 ### 8.7 当前结论
 
 - 新前端已覆盖旧前端 **登录、Dashboard、项目、节点、数据源、数据表、模型管理、消息、周期任务、账户、机构、P2P 项目/节点** 等核心 CRUD 能力。
-- **结果管理独立页、DAG 模型提交、DAG 周期任务入口** 是剩余最显著的迁移缺口。
+- **DAG 模型提交、DAG 周期任务入口** 是剩余最显著的迁移缺口。
 - **EDGE/P2P 工作台聚合页、新用户引导、数据上传、隐私场景展示页** 是次要的体验与平台适配缺口。
 - 旧前端中部分能力（如 `pages/graphs.tsx` 占位页、部分已弃用的 CENTER 工作台）可不再迁移，直接以新前端的独立路由方式替代。
