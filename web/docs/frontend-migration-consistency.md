@@ -195,4 +195,16 @@ corepack pnpm exec playwright test
 - 补充中英双语字典 `dataTables.*` 与 `projects.selectProject`。
 - 验证：类型检查与 lint 通过，无新增错误。
 
+### 7.8 Nodes 页面增强（2026-07-27 后续）
+
+- 重写 `pages/nodes/index.tsx`：
+  - 节点列表增加搜索框（按名称 / ID / 通讯地址过滤）。
+  - 点击节点名称打开详情抽屉，包含三个标签页：
+    - **基本信息**：节点名、ID、类型、状态、地址、注册时间、描述；对 `type === 'embedded'` 显示“内置”标签。
+    - **部署令牌**：展示 Token 状态与内容，支持复制与重新生成。
+    - **节点产物**：调用 `node/result/list` 获取模型/规则等产物，支持查看产物详情（`node/result/detail`）。
+  - 保留原有注册、编辑、刷新、删除、查看 Token 功能。
+- 补充中英双语字典 `nodes.*`（detail / basicInfo / deployToken / nodeResults / embedded 等）。
+- 验证：类型检查与 lint 通过，无新增错误。
+
 
