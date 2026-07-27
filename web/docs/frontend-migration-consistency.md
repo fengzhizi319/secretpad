@@ -260,6 +260,33 @@ corepack pnpm exec playwright test
 
 > 数据来源：旧前端基于 `github.com/fengzhizi319/secretpad-frontend.git`（clone 到 `/tmp/secretpad-frontend-analysis`）的 `main` 分支；新前端基于 `secretpad/web/` 当前工作区。下文以“旧前端”指代 `secretpad-frontend`（原 `frontend-src`），“新前端”指代 `secretpad/web/`。
 
+### 7.13 DAG 模型提交入口（Phase 8）
+
+- 新增 `features/model-pack/model-pack-modal.tsx`：
+  - 接收 `projectId`、`graphId`、`trainNode`（成功训练节点）。
+  - 打开 Modal 时调用 `model/modelPartyPath` 获取每个参与方可用的数据源，默认选中第一个数据源。
+  - 用户填写模型名称，确认后构造 `modelPartyConfig` 与 `modelComponent`（从 `nodeDef` 读取 domain / name / version）。
+  - 提交 `model/pack` 后，若返回 `jobId` 则轮询 `model/status` 直至 `SUCCEED` 或 `FAILED`。
+- 在 `pages/dag/index.tsx` 工具栏增加“打包模型”按钮：仅当选中节点状态为 `Success` 且 `codeName` 包含 `train` 时展示。
+- 补充 `i18n/dictionaries.ts`：`models.packFromDagTitle`、`models.trainNode`、`dag.packModel` 等中英键值。
+- 验证：`corepack pnpm --filter @secretpad/app typecheck` 与 `corepack pnpm run lint` 通过（0 errors）。
+
+### 7.14 DAG 周期任务入口（Phase 9）
+
+- 新增 `features/scheduled-task-from-dag/scheduled-task-modal.tsx`：
+  - 接收 `projectId`、`graphId`、`graphName`、当前 `nodes[]`。
+  - 打开 Modal 时默认全选当前 DAG 节点作为执行节点，并校验 `scheduled/graph/once/success`；若图尚未成功运行过，提示用户先运行成功。
+  - 用户填写任务名称与 Cron 表达式，提交 `scheduled/graph/create`。
+- 在 `pages/dag/index.tsx` 工具栏增加“创建周期任务”按钮：当选中 graph 时展示。
+- 补充 `i18n/dictionaries.ts`：`dag.createPeriodicTask`、`dag.periodicTaskOnceSuccessHint`、`dag.periodicTaskNodes`、`dag.periodicTaskSelectAll`、`dag.periodicTaskDeselectAll` 等中英键值。
+- 验证：`corepack pnpm --filter @secretpad/app typecheck` 与 `corepack pnpm run lint` 通过（0 errors）。
+
+### 7.15 迁移完成度总结（更新）
+
+- P0 功能（DAG 模板库、结果管理独立页、DAG 模型提交入口、DAG 周期任务入口）已全部完成。
+- 旧前端核心日常流程（项目 / 节点 / 数据表 / 数据源 / 模型 / 消息 / 周期任务 / DAG 编排与运行 / 结果查看）均已在新前端实现并接入真实接口。
+- 剩余 P1/P2 功能（DAG 高级配置、组件解释器、新用户引导、数据上传、工作台聚合页、隐私场景展示页、模型导出/发布、云日志 SLS、组件版本等）不阻塞主业务闭环，可后续按需迁移。
+
 ### 8.1 对比维度说明
 
 | 维度 | 说明 |
@@ -376,7 +403,7 @@ corepack pnpm exec playwright test
 | 数据源管理 | `all-data-sources`, `data-source-list` | `pages/data-sources` | ✅ 已迁移 | 含详情页。 |
 | 数据表管理 | `all-data-tables`, `data-manager`, `data-table-add`, `data-table-info`, `data-table-auth` | `pages/data-tables` | ✅ 已迁移 | 含 schema、授权、Push TEE、L1–L5 分类。 |
 | 数据表树 / 血缘 | `data-table-tree` | 无独立页面 | ⚠️ 部分迁移 | 数据表详情内有“授权链路”，但缺少完整的树形血缘视图。 |
-| 模型管理 / 打包 / 部署 / 废弃 | `model-manager`, `dag-model-submission` | `pages/models` + DAG 右侧面板 | ⚠️ 部分迁移 | 模型列表、打包、部署已迁移；从 DAG 画布直接“模型提交”的入口未迁移。 |
+| 模型管理 / 打包 / 部署 / 废弃 | `model-manager`, `dag-model-submission` | `pages/models` + DAG 工具栏 | ✅ 已迁移 | 模型列表、打包、部署、从 DAG 训练节点直接打包均已迁移。 |
 | 消息中心 | `message-center` | `pages/messages` | ✅ 已迁移 | 审批/回复、详情、未读角标。 |
 | 周期任务 | `periodic-task` | `pages/periodic-tasks` | ✅ 已迁移 | 创建、下线、删除、运行记录。 |
 | 账户信息 / 修改密码 | `user` / `account` | `pages/account` | ✅ 已迁移 | 密码 SHA-256 哈希。 |
@@ -387,8 +414,8 @@ corepack pnpm exec playwright test
 | 隐私组件场景 | `privacy-scenes` | 无独立页面 | ❌ 未迁移 | 旧前端用于展示场景模板并快速创建项目；新前端无等效页面。 |
 | 新用户引导 | `guide`, `guide-pipeline`, `guide-node`, `guide-tour`, `dag-guide-tour`, `dag-record-guide-tour` | 无 | ❌ 未迁移 | 首次使用引导、DAG 操作引导均未实现。 |
 | DAG 模板向导 | `pipeline` | `features/dag-templates` + `pages/dag` | ✅ 已迁移 | 已迁移 blank/psi/data-classification/sanitization/k-anonymity/l-diversity/local-differential-privacy/differential-privacy/query-obfuscation/risk/tee 共 11 个模板；向导按 basic/privacy/ml 分类展示。 |
-| DAG 模型提交入口 | `dag-model-submission` | 无 | ❌ 未迁移 | 在 DAG 运行后选择节点进行模型打包/提交的抽屉未实现。 |
-| DAG 周期任务入口 | `main-dag/periodic-task-entry` | 无 | ❌ 未迁移 | 从 DAG 直接创建周期任务的入口未实现。 |
+| DAG 模型提交入口 | `dag-model-submission` | `features/model-pack` + `pages/dag` | ✅ 已迁移 | 在 DAG 工具栏选择成功训练节点后可直接打包模型，调用 `model/pack` 并轮询 `model/status`。 |
+| DAG 周期任务入口 | `main-dag/periodic-task-entry` | `features/scheduled-task-from-dag` + `pages/dag` | ✅ 已迁移 | 在 DAG 工具栏直接创建周期任务，调用 `scheduled/graph/create`。 |
 | DAG 运行记录 / 报告 | `dag-record`, `pipeline-record-list`, `dag-result` | 无独立页面 | ⚠️ 部分迁移 | 项目详情与 DAG 节点面板可查看单次任务日志/输出；缺少统一的 pipeline 运行记录列表和结果报告页。 |
 | DAG 高级配置 | `advanced-config` | 无 | ❌ 未迁移 | 算子高级配置抽屉未实现。 |
 | DAG 组件树 / 组件解释器 | `component-tree`, `component-interpreter`, `component-config` | `packages/dag-next` | ⚠️ 部分迁移 | 组件面板已按后端 `component/list` 分组展示；组件解释器、配置表单自动生成、面板样式注册等高级能力未迁移。 |
@@ -415,13 +442,15 @@ corepack pnpm exec playwright test
    - 新前端：新增 `/results` 路由与侧边栏入口，调用 `node/result/list`、`node/result/detail`、`data/download`。
    - 支持搜索、按类型（table/report/rule/model）筛选、时间排序、分页、下载、详情弹窗。批量删除旧前端未完全实现，暂不迁移。
 
-3. **DAG 模型提交入口**（`pages/dag` 右侧面板）
+3. **DAG 模型提交入口**（`pages/dag` 工具栏）✅ 已完成
    - 旧模块：`dag-model-submission`（`SubmissionDrawer`、`PipelineTitleComponent`）。
-   - 建议：当选中训练节点且运行成功后，在节点面板增加“Pack Model”按钮，调用 `model/pack` 并轮询状态。
+   - 新前端：`features/model-pack/model-pack-modal.tsx`。
+   - 实现：在 DAG 工具栏选中成功训练节点后展示“打包模型”按钮；调用 `model/modelPartyPath` 获取参与方数据源，构造 `modelPartyConfig` 与 `modelComponent`，提交 `model/pack` 并轮询 `model/status` 至 SUCCEED / FAILED。
 
-4. **DAG 周期任务入口**（`pages/dag`）
+4. **DAG 周期任务入口**（`pages/dag` 工具栏）✅ 已完成
    - 旧模块：`main-dag/periodic-task-entry`。
-   - 建议：在 DAG 工具栏增加“创建周期任务”按钮，将当前 graph 与 cron 表达式写入 `scheduled/graph/create`。
+   - 新前端：`features/scheduled-task-from-dag/scheduled-task-modal.tsx`。
+   - 实现：在 DAG 工具栏增加“创建周期任务”按钮；校验 `scheduled/graph/once/success` 后，将当前 graph、默认全部节点、cron 表达式与任务名称写入 `scheduled/graph/create`。
 
 #### 8.5.2 P1（提升体验，建议下一阶段补齐）
 
@@ -480,6 +509,6 @@ corepack pnpm exec playwright test
 ### 8.7 当前结论
 
 - 新前端已覆盖旧前端 **登录、Dashboard、项目、节点、数据源、数据表、模型管理、消息、周期任务、账户、机构、P2P 项目/节点** 等核心 CRUD 能力。
-- **DAG 模型提交、DAG 周期任务入口** 是剩余最显著的迁移缺口。
-- **EDGE/P2P 工作台聚合页、新用户引导、数据上传、隐私场景展示页** 是次要的体验与平台适配缺口。
+- **DAG 模板库、结果管理独立页、DAG 模型提交入口、DAG 周期任务入口** 等剩余 P0 功能已全部补齐。
+- 旧前端核心日常流程已可完全由新前端承载；剩余 **EDGE/P2P 工作台聚合页、新用户引导、数据上传、隐私场景展示页、DAG 高级配置、组件解释器、模型导出/发布、云日志 SLS、组件版本管理** 等 P1/P2 功能按业务优先级分阶段迁移即可。
 - 旧前端中部分能力（如 `pages/graphs.tsx` 占位页、部分已弃用的 CENTER 工作台）可不再迁移，直接以新前端的独立路由方式替代。
