@@ -32,9 +32,11 @@ api.use({
     if (response.status === 401) {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem('secretpad-token');
+        localStorage.removeItem('secretpad-user');
       }
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        // Use replace so the broken route is not kept in the history stack.
+        window.location.replace('/login');
       }
     }
     return response;

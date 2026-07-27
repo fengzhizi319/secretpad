@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { Card, Badge, Button } from '@secretpad/design-system';
 import { apiClient } from '@secretpad/api-client';
 import { useTranslation } from '../../shared/lib/i18n';
@@ -25,8 +25,36 @@ export const DashboardPage: React.FC = () => {
   const nodes = nodesQuery.data ?? [];
   const projects = projectsQuery.data ?? [];
   const jobs = jobsQuery.data ?? [];
+
+  /**
+   * 数据资产统计：并行查询每个节点下的数据表数量。
+   *
+   * 设计要点：
+   * 1. 后端 `/api/v1alpha1/datatable/list` 是按节点(ownerId)分页查询的，
+   *    没有一次性返回全平台所有数据表的接口，因此需要对每个节点发一次请求。
+   * 2. 使用 `useQueries` 而非循环调用 `useQuery`：React Query 在 render 阶段
+   *    必须保持 hooks 顺序稳定，`useQueries` 内部会根据 `nodes` 数组动态生成
+   *    一组等长的查询，保证顺序与节点顺序一致，避免违反 Hooks 规则。
+   * 3. `enabled: nodes.length > 0` 防止在节点列表尚未加载时发送无意义的请求；
+   *    同时当节点数组变化时，React Query 会自动为新增/减少的节点增删查询。
+   * 4. 汇总方式：每个查询返回该节点的数据表数组，取所有查询结果长度之和作为
+   *    总数据资产数；任一查询失败都会被收集到 `error` 中统一展示。
+   */
+  const tablesQueries = useQueries({
+    queries: nodes.map((node) => ({
+      queryKey: ['datatables', node.nodeId],
+      queryFn: () => apiClient.getDataTables(node.nodeId),
+      enabled: nodes.length > 0,
+    })),
+  });
+  const totalTables = tablesQueries.reduce((sum, q) => sum + (q.data?.length ?? 0), 0);
+
   const error =
-    nodesQuery.error?.message || projectsQuery.error?.message || jobsQuery.error?.message || null;
+    nodesQuery.error?.message ||
+    projectsQuery.error?.message ||
+    jobsQuery.error?.message ||
+    tablesQueries.find((q) => q.error)?.error?.message ||
+    null;
 
   const readyNodes = nodes.filter((n) => n.nodeStatus === 'Ready' || n.status === 'Ready').length;
 
@@ -39,7 +67,7 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {/* Stat Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="hover:border-blue-500/50 transition-all cursor-pointer" bodyClassName="p-4">
           <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
             <span>{t('dashboard.projects')}</span>
@@ -59,6 +87,17 @@ export const DashboardPage: React.FC = () => {
           <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{nodes.length}</div>
           <div className="mt-1 text-[11px] text-gray-500">
             {t('dashboard.ready', { ready: readyNodes, total: nodes.length })}
+          </div>
+        </Card>
+
+        <Card className="hover:border-blue-500/50 transition-all cursor-pointer" bodyClassName="p-4">
+          <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
+            <span>{t('dashboard.dataTables')}</span>
+            <span className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600">🗄️</span>
+          </div>
+          <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{totalTables}</div>
+          <div className="mt-1 text-[11px] text-gray-500">
+            {nodes.length > 0 ? t('dashboard.avgTables', { avg: (totalTables / nodes.length).toFixed(1) }) : t('dashboard.noNodes')}
           </div>
         </Card>
 

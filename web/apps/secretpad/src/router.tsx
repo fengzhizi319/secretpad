@@ -63,26 +63,60 @@ const RootComponent: React.FC = () => (
  * Route-level error fallback. TanStack Router renders this when a route's
  * loader or component throws, so a single bad page degrades locally instead
  * of blanking the whole app.
+ *
+ * Authentication errors are handled centrally: when the backend returns 401
+ * ("login is required"), we clear the stale token and send the user back to
+ * the login page. This avoids showing the raw error screen on the initial
+ * visit when an expired token is still in localStorage.
  */
-const RouteErrorComponent: React.FC<{ error: Error; reset: () => void }> = ({ error, reset }) => (
-  <div className="min-h-[60vh] flex items-center justify-center p-6">
-    <div className="max-w-md w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-lg p-8 text-center">
-      <div className="text-4xl mb-4" aria-hidden>
-        ⚠️
+const isAuthError = (error: Error): boolean => {
+  const message = error.message || '';
+  return (
+    message.includes('login is required') ||
+    message.includes('用户认证失败') ||
+    message.includes('Authentication failed') ||
+    message.includes('Unauthorized')
+  );
+};
+
+const RouteErrorComponent: React.FC<{ error: Error; reset: () => void }> = ({ error, reset }) => {
+  if (isAuthError(error)) {
+    // Clear stale credentials and redirect to login. Use replace to avoid
+    // leaving the broken route in the history stack.
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('secretpad-token');
+      localStorage.removeItem('secretpad-user');
+    }
+    if (typeof window !== 'undefined') {
+      window.location.replace('/login');
+    }
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center p-6">
+        <div className="text-xs text-gray-400">{error.message}</div>
       </div>
-      <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Page failed to load</h1>
-      <p className="text-xs text-gray-400 dark:text-gray-500 font-mono break-all mb-6">{error.message}</p>
-      <div className="flex justify-center gap-3">
-        <Button variant="outline" onClick={reset}>
-          Try again
-        </Button>
-        <Button variant="primary" onClick={() => (window.location.href = '/dashboard')}>
-          Back to dashboard
-        </Button>
+    );
+  }
+
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center p-6">
+      <div className="max-w-md w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-lg p-8 text-center">
+        <div className="text-4xl mb-4" aria-hidden>
+          ⚠️
+        </div>
+        <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Page failed to load</h1>
+        <p className="text-xs text-gray-400 dark:text-gray-500 font-mono break-all mb-6">{error.message}</p>
+        <div className="flex justify-center gap-3">
+          <Button variant="outline" onClick={reset}>
+            Try again
+          </Button>
+          <Button variant="primary" onClick={() => (window.location.href = '/dashboard')}>
+            Back to dashboard
+          </Button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const rootRoute = createRootRoute({
   component: RootComponent,
