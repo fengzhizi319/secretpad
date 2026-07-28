@@ -47,10 +47,11 @@ if [[ $WITH_FRONTEND_FLAG == "" ]]; then
 fi
 
 # ----------------------------------------------------------------------------
-# 步骤2: 如果需要集成前端，则本地构建 secretpad/web 并复制产物到后端 static 目录
+# 步骤2: 如果需要集成前端，则本地构建 secretpad/frontend-src 并复制产物到后端 static 目录
 # ----------------------------------------------------------------------------
-# 前端与后端采用同仓并列隔离（Monorepo）架构：
-#   - 前端代码位于 secretpad/web/，与后端同仓库但独立构建
+# 前端为独立仓库（secretpad-frontend），需先克隆到 secretpad/frontend-src/ 再构建：
+#   - 前端代码位于 secretpad/frontend-src/（独立 git 仓库，不纳入后端版本管理）
+#   - 实际应用为 apps/platform（包名 secretpad，umi 构建）
 #   - 生产打包时先在前端目录执行 pnpm build，再把 dist/* 复制到
 #     secretpad-web/src/main/resources/static/
 #   - Spring Boot 会自动将 src/main/resources/static 下的文件作为静态资源服务
@@ -59,8 +60,8 @@ if [[ $WITH_FRONTEND_FLAG == true ]]; then
 	ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../" && pwd -P)
 
 	# 2.2 前端工程目录与产物目录
-	FRONTEND_DIR="${FRONTEND_DIR:-${ROOT}/web}"
-	DIST_DIR="${FRONTEND_DIR}/apps/secretpad/dist"
+	FRONTEND_DIR="${FRONTEND_DIR:-${ROOT}/frontend-src}"
+	DIST_DIR="${FRONTEND_DIR}/apps/platform/dist"
 	TARGET_DIR="${ROOT}/secretpad-web/src/main/resources/static"
 
 	if [[ ! -d "${FRONTEND_DIR}" ]]; then

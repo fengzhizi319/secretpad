@@ -83,12 +83,8 @@ docs/_build
 /backend.log
 /backend.pid
 
-### New Vite frontend (secretpad/web) ###
-/web/**/node_modules/
-/web/**/.vite/
-/web/**/dist/
-/web/.turbo/
-/web/**/tsconfig.tsbuildinfo
+### Frontend is an independent repo (secretpad-frontend), cloned to secretpad/frontend-src/ ###
+/frontend-src/
 
 ### Backend static resources (populated by build.sh) ###
 /secretpad-web/src/main/resources/static/
