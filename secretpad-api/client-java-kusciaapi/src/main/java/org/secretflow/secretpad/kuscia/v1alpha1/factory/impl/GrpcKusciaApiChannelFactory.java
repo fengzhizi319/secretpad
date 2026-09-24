@@ -31,7 +31,6 @@ import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslProvider;
-import io.grpc.netty.shaded.io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.Assert;
 
@@ -112,18 +111,26 @@ public class GrpcKusciaApiChannelFactory implements KusciaApiChannelFactory {
             SslContextBuilder clientContextBuilder = SslContextBuilder.forClient();
             GrpcSslContexts.configure(clientContextBuilder, SslProvider.OPENSSL);
 
-            SslContext sslContext = null;
+            // 安全整改（docs/secretpad_auth.md P0-2）：此前用 InsecureTrustManagerFactory，
+            // 等于不校验 Kuscia 服务端证书，中间人可完全劫持这条控制面链路。现在用
+            // KusciaGrpcConfig.caFile 显式声明的受信 CA 校验服务端证书；SSL 构造失败必须
+            // 让通道初始化整体失败（抛异常），不能像此前那样继续用 sslContext=null 建连——
+            // 那等价于"验证失败就当验证通过"。
+            SslContext sslContext;
             try {
                 File cert = FileUtils.readFile(kusciaGrpcConfig.getCertFile());
                 File key = FileUtils.readFile(kusciaGrpcConfig.getKeyFile());
+                File ca = FileUtils.readFile(kusciaGrpcConfig.getCaFile());
                 sslContext = clientContextBuilder
                         .keyManager(cert, key)
-                        .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                        .trustManager(ca)
                         .build();
             } catch (SSLException e) {
-                log.error("Failed to create ssl context", e);
+                throw new IllegalStateException("Failed to create ssl context for domain "
+                        + kusciaGrpcConfig.getDomainId(), e);
             } catch (FileNotFoundException e) {
-                log.error("Failed to create ssl context, cert or key file not found", e);
+                throw new IllegalStateException("Failed to create ssl context, cert/key/ca file not found for domain "
+                        + kusciaGrpcConfig.getDomainId(), e);
             }
 
             nettyChannelBuilder

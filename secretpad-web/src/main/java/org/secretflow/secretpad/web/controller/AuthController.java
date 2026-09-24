@@ -22,11 +22,14 @@ import org.secretflow.secretpad.common.util.UserContext;
 import org.secretflow.secretpad.service.AuthService;
 import org.secretflow.secretpad.service.model.auth.LoginRequest;
 import org.secretflow.secretpad.service.model.common.SecretPadResponse;
+import org.secretflow.secretpad.service.util.RateLimitUtil;
 import org.secretflow.secretpad.web.util.AuthUtils;
+import org.secretflow.secretpad.web.util.RequestUtils;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -39,6 +42,14 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping(value = "/api")
 public class AuthController {
     private final AuthService authService;
+
+    /**
+     * 登录端点限速（安全整改 P1-4，docs/secretpad_auth.md，对应现状清单 M3）：按来源 IP，
+     * 默认每分钟 20 次。锁定机制按用户名计数，换一个用户名（或对不存在的用户名撞库）
+     * 就能绕开——这里补的是锁定覆盖不到的那个维度，两者互补，不是二选一。
+     */
+    @Value("${secretpad.login-rate-limit-per-minute:20}")
+    private double loginRateLimitPerMinute;
 
     @Autowired
     public AuthController(AuthService authService) {
@@ -54,6 +65,10 @@ public class AuthController {
     @ResponseBody
     @PostMapping(value = "/login", consumes = "application/json")
     public SecretPadResponse<UserContextDTO> login(@Valid @RequestBody LoginRequest request) {
+        // loginRateLimitPerMinute <= 0 视为关闭该层限速（与其它可选安全层的显式关闭口径一致）。
+        if (loginRateLimitPerMinute > 0) {
+            RateLimitUtil.verifyRate("login:" + RequestUtils.getRemoteHost(), loginRateLimitPerMinute, 60);
+        }
         UserContextDTO login = authService.login(request.getName(), request.getPasswordHash());
         return SecretPadResponse.success(login);
     }

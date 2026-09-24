@@ -50,6 +50,30 @@ public final class RateLimitUtil {
         }
     }
 
+    /**
+     * 按任意调用方给定的 key（而不是当前登录用户）做限速。
+     * <p>
+     * 安全整改（docs/secretpad_auth.md P1-4，对应现状清单 M3）：{@link #verifyRate()} 依赖
+     * {@link UserContext#getUserName()}，只能用在"已经认证过"的路径上——登录端点本身在认证发生
+     * 之前，没有 UserContext 可用，历史上因此完全没有限速，只能靠"锁定"防刷，而锁定按用户名计数，
+     * 换一个用户名（或对不存在的用户名撞库）就能绕开。这个重载让调用方显式传入限速维度
+     * （典型用法：登录端点按来源 IP），不依赖任何已认证身份。
+     *
+     * @param key                        限速维度，如 {@code "login:" + 客户端IP}
+     * @param timesCanPassInTimeSeconds  时间窗口内允许通过的次数
+     * @param timeSeconds                时间窗口（秒）
+     */
+    public static void verifyRate(String key, double timesCanPassInTimeSeconds, double timeSeconds) {
+        try {
+            RateLimiter rateLimiter = getRateLimiter(key, timesCanPassInTimeSeconds, timeSeconds);
+            if (!rateLimiter.tryAcquire()) {
+                throw SecretpadException.of(SystemErrorCode.REQUEST_FREQUENCY_ERROR);
+            }
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static RateLimiter getRateLimiter(String userName) throws ExecutionException {
         return getRateLimiter(userName, 5.0, 60);
     }

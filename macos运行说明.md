@@ -106,7 +106,7 @@ bash scripts/dev-start-mac.sh
 🌐 前端开发服务器：http://localhost:8000
 🔧 后端健康检查：http://localhost:8080/actuator/health
 🔒 后端 HTTPS 地址：https://localhost:8443
-👤 登录账号：admin / 12345678
+👤 登录账号：admin / 初始口令见 `config/initial-admin-password`（首次启动随机生成，首登后改密并删除该文件）
 ```
 
 > 如果终端不支持直接点击链接，可手动复制 `http://localhost:8000` 到浏览器打开。
@@ -242,14 +242,14 @@ java -Dspring.profiles.active=dev \
 
 ```text
 SecretPad start success, http://xxx.xxx.xxx.xxx:8443 innerHttpPort:9001 Profile:dev
-userName:admin password:12345678
+initial admin credentials (first start only): see file ./config/initial-admin-password
 ```
 
 - **HTTP 端口**：8080（API 访问）
 - **HTTPS 端口**：8443（若按上面配置）
 - **内部端口**：9001
 - **用户名**：`admin`
-- **密码**：`12345678`（当前代码已固定为 `12345678`，详见 `docs/development/test-guides/cipher12345678.md`）
+- **密码**：首次启动随机生成并写入 `config/initial-admin-password`（0600），日志不再打印；也可用环境变量 `SECRETPAD_PASSWORD` 指定。详见 `docs/development/test-guides/cipher12345678.md`
 
 健康检查：
 
@@ -333,7 +333,7 @@ PORT=8001 pnpm --filter secretpad dev
 
 1. 打开 `http://localhost:8000`
 2. 输入用户名 `admin`
-3. 输入密码 `12345678`（当前代码已固定，详见 `docs/development/test-guides/cipher12345678.md`）
+3. 输入密码：`cat config/initial-admin-password` 取初始口令（或你通过 `SECRETPAD_PASSWORD` 指定的口令）
 4. 点击登录，成功后会进入平台首页
 
 ### 5.2 界面功能说明
@@ -439,7 +439,7 @@ bash scripts/dev-start-mac.sh
 🌐 前端开发服务器：http://localhost:8000
 🔧 后端健康检查：http://localhost:8080/actuator/health
 🔒 后端 HTTPS 地址：https://localhost:8443
-👤 登录账号：admin / 12345678
+👤 登录账号：admin / 初始口令见 `config/initial-admin-password`（首次启动随机生成，首登后改密并删除该文件）
 ```
 
 ### 6.4 常用命令
@@ -715,7 +715,7 @@ export KUSCIA_PROTOCOL=notls
 
 1. 确认后端已启动：`curl http://127.0.0.1:8080/actuator/health`
 2. 确认前端代理配置 `apps/platform/.env` 指向正确的后端端口
-3. 当前代码已固定密码为 `12345678`，用户名 `admin`
+3. 初始口令在 `config/initial-admin-password`；账号已存在时重启**不会**重置口令（P0-1 整改前会被重置）
 4. 若忘记密码或曾用旧密码启动过，可删除数据库重新生成：
 
    ```bash

@@ -32,9 +32,11 @@ import org.secretflow.secretpad.scheduled.model.ScheduledDelRequest;
 import org.secretflow.secretpad.scheduled.model.ScheduledIdRequest;
 import org.secretflow.secretpad.scheduled.model.ScheduledInfoRequest;
 import org.secretflow.secretpad.scheduled.model.ScheduledOfflineRequest;
+import org.secretflow.secretpad.service.model.common.SecretPadResponse;
 import org.secretflow.secretpad.service.model.node.*;
 import org.secretflow.secretpad.web.utils.FakerUtils;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.secretflow.v1alpha1.common.Common;
@@ -46,8 +48,12 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletResponse;
+
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.secretflow.secretpad.common.constant.Constants.SUCCESS_STATUS_MESSAGE;
 
@@ -237,6 +243,61 @@ class ScheduledControllerTest extends ControllerTest {
         });
     }
 
+    /**
+     * 安全整改回归（docs/secretpad_auth.md §8，IDOR）：owner 与 test-job.sql 里 project_schedule 的
+     * owner("kuscia-system") 一致时，分页必须仍能查到真实数据——防止"谓词恒假"式的过度修复把
+     * 正常场景也一并挡死。
+     */
+    @Sql(scripts = {"/test-job.sql"})
+    @Test
+    void pageMatchingOwnerSeesData() throws Exception {
+        UserContextDTO user = UserContext.getUser();
+        user.setOwnerId("kuscia-system");
+        PageScheduledRequest pageScheduledRequest = FakerUtils.fake(PageScheduledRequest.class);
+        pageScheduledRequest.setProjectId(projectId);
+        pageScheduledRequest.setSearch("");
+        pageScheduledRequest.setStatus("");
+        pageScheduledRequest.setPage(1);
+        pageScheduledRequest.setSize(10);
+        pageScheduledRequest.setSort(null);
+        MockHttpServletResponse response = mockMvc.perform(
+                        MockMvcRequestBuilders.post(getMappingUrl(ScheduledController.class, "page", PageScheduledRequest.class))
+                                .content(JsonUtils.toJSONString(pageScheduledRequest))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.APPLICATION_JSON))
+                .andReturn().getResponse();
+        SecretPadResponse secretPadResponse = JsonUtils.toJavaObject(response.getContentAsString(), SecretPadResponse.class);
+        Map<String, Object> data = (Map<String, Object>) secretPadResponse.getData();
+        Assertions.assertTrue(((Number) data.get("total")).longValue() > 0);
+    }
+
+    /**
+     * 安全整改回归（docs/secretpad_auth.md §8，IDOR）：owner 与 project_schedule 实际 owner 不一致时，
+     * 即便 projectId 完全猜中，分页也必须返回空结果，而不是该项目下的全部调度记录。
+     */
+    @Sql(scripts = {"/test-job.sql"})
+    @Test
+    void pageCrossTenantIsEmpty() throws Exception {
+        UserContextDTO user = UserContext.getUser();
+        user.setOwnerId("123");
+        PageScheduledRequest pageScheduledRequest = FakerUtils.fake(PageScheduledRequest.class);
+        pageScheduledRequest.setProjectId(projectId);
+        pageScheduledRequest.setSearch("");
+        pageScheduledRequest.setStatus("");
+        pageScheduledRequest.setPage(1);
+        pageScheduledRequest.setSize(10);
+        pageScheduledRequest.setSort(null);
+        MockHttpServletResponse response = mockMvc.perform(
+                        MockMvcRequestBuilders.post(getMappingUrl(ScheduledController.class, "page", PageScheduledRequest.class))
+                                .content(JsonUtils.toJSONString(pageScheduledRequest))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.APPLICATION_JSON))
+                .andReturn().getResponse();
+        SecretPadResponse secretPadResponse = JsonUtils.toJavaObject(response.getContentAsString(), SecretPadResponse.class);
+        Map<String, Object> data = (Map<String, Object>) secretPadResponse.getData();
+        Assertions.assertEquals(0L, ((Number) data.get("total")).longValue());
+    }
+
     @Sql(scripts = {"/test-job.sql"})
     @Test
     void offline() throws Exception {
@@ -267,11 +328,30 @@ class ScheduledControllerTest extends ControllerTest {
     @Test
     void info() throws Exception {
         assertResponse(() -> {
+            UserContextDTO user = UserContext.getUser();
+            user.setOwnerId("kuscia-system");
             ScheduledInfoRequest scheduledInfoRequest = FakerUtils.fake(ScheduledInfoRequest.class);
             scheduledInfoRequest.setScheduleId("489A1F7577");
             return MockMvcRequestBuilders.post(getMappingUrl(ScheduledController.class, "info", ScheduledInfoRequest.class))
                     .content(JsonUtils.toJSONString(scheduledInfoRequest));
         });
+    }
+
+    /**
+     * 安全整改回归（docs/secretpad_auth.md §8，IDOR）：非 owner 读取他人调度详情必须被拒绝，
+     * 对应 {@code ScheduledServiceImpl.info()} 新增的 checkOwner 调用。
+     */
+    @Sql(scripts = {"/test-job.sql"})
+    @Test
+    void infoNotOwner() throws Exception {
+        assertErrorCode(() -> {
+            UserContextDTO user = UserContext.getUser();
+            user.setOwnerId("123");
+            ScheduledInfoRequest scheduledInfoRequest = FakerUtils.fake(ScheduledInfoRequest.class);
+            scheduledInfoRequest.setScheduleId("489A1F7577");
+            return MockMvcRequestBuilders.post(getMappingUrl(ScheduledController.class, "info", ScheduledInfoRequest.class))
+                    .content(JsonUtils.toJSONString(scheduledInfoRequest));
+        }, ScheduledErrorCode.USER_NOT_OWNER);
     }
 
     @Sql(scripts = {"/test-job.sql"})
@@ -287,6 +367,59 @@ class ScheduledControllerTest extends ControllerTest {
             return MockMvcRequestBuilders.post(getMappingUrl(ScheduledController.class, "taskPage", TaskPageScheduledRequest.class))
                     .content(JsonUtils.toJSONString(taskPageScheduledRequest));
         });
+    }
+
+    /**
+     * 安全整改回归（docs/secretpad_auth.md §8，IDOR）：TaskPageScheduledRequest 无 projectId 字段，
+     * owner 匹配（"kuscia-system"）时分页仍须能查到 test-job.sql 里挂在 scheduleId=489A1F7577 下的
+     * 真实任务，防止过度修复把正常场景一并挡死。
+     */
+    @Sql(scripts = {"/test-job.sql"})
+    @Test
+    void taskPageMatchingOwnerSeesData() throws Exception {
+        UserContextDTO user = UserContext.getUser();
+        user.setOwnerId("kuscia-system");
+        TaskPageScheduledRequest taskPageScheduledRequest = FakerUtils.fake(TaskPageScheduledRequest.class);
+        taskPageScheduledRequest.setScheduleId("489A1F7577");
+        taskPageScheduledRequest.setSearch("");
+        taskPageScheduledRequest.setPage(1);
+        taskPageScheduledRequest.setSize(10);
+        taskPageScheduledRequest.setSort(null);
+        MockHttpServletResponse response = mockMvc.perform(
+                        MockMvcRequestBuilders.post(getMappingUrl(ScheduledController.class, "taskPage", TaskPageScheduledRequest.class))
+                                .content(JsonUtils.toJSONString(taskPageScheduledRequest))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.APPLICATION_JSON))
+                .andReturn().getResponse();
+        SecretPadResponse secretPadResponse = JsonUtils.toJavaObject(response.getContentAsString(), SecretPadResponse.class);
+        Map<String, Object> data = (Map<String, Object>) secretPadResponse.getData();
+        Assertions.assertTrue(((Number) data.get("total")).longValue() > 0);
+    }
+
+    /**
+     * 安全整改回归（docs/secretpad_auth.md §8，IDOR）：即便完全猜中另一租户的 scheduleId，
+     * owner 不匹配时任务分页也必须返回空结果，而不是把该 schedule 下的全部任务枚举出来。
+     */
+    @Sql(scripts = {"/test-job.sql"})
+    @Test
+    void taskPageCrossTenantIsEmpty() throws Exception {
+        UserContextDTO user = UserContext.getUser();
+        user.setOwnerId("123");
+        TaskPageScheduledRequest taskPageScheduledRequest = FakerUtils.fake(TaskPageScheduledRequest.class);
+        taskPageScheduledRequest.setScheduleId("489A1F7577");
+        taskPageScheduledRequest.setSearch("");
+        taskPageScheduledRequest.setPage(1);
+        taskPageScheduledRequest.setSize(10);
+        taskPageScheduledRequest.setSort(null);
+        MockHttpServletResponse response = mockMvc.perform(
+                        MockMvcRequestBuilders.post(getMappingUrl(ScheduledController.class, "taskPage", TaskPageScheduledRequest.class))
+                                .content(JsonUtils.toJSONString(taskPageScheduledRequest))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.APPLICATION_JSON))
+                .andReturn().getResponse();
+        SecretPadResponse secretPadResponse = JsonUtils.toJavaObject(response.getContentAsString(), SecretPadResponse.class);
+        Map<String, Object> data = (Map<String, Object>) secretPadResponse.getData();
+        Assertions.assertEquals(0L, ((Number) data.get("total")).longValue());
     }
 
     @Sql(scripts = {"/test-job.sql"})
@@ -376,12 +509,32 @@ class ScheduledControllerTest extends ControllerTest {
     @Test
     void taskInfo() throws Exception {
         assertResponse(() -> {
+            UserContextDTO user = UserContext.getUser();
+            user.setOwnerId("kuscia-system");
             TaskInfoScheduledRequest taskInfoScheduledRequest = FakerUtils.fake(TaskInfoScheduledRequest.class);
             taskInfoScheduledRequest.setScheduleId("489A1F7577");
             taskInfoScheduledRequest.setScheduleTaskId("ujaj-20240904193254");
             return MockMvcRequestBuilders.post(getMappingUrl(ScheduledController.class, "taskInfo", TaskInfoScheduledRequest.class))
                     .content(JsonUtils.toJSONString(taskInfoScheduledRequest));
         });
+    }
+
+    /**
+     * 安全整改回归（docs/secretpad_auth.md §8，IDOR）：非 owner 读取他人任务详情必须被拒绝，
+     * 对应 {@code ScheduledServiceImpl.taskInfo()} 新增的 checkOwner 调用。
+     */
+    @Sql(scripts = {"/test-job.sql"})
+    @Test
+    void taskInfoNotOwner() throws Exception {
+        assertErrorCode(() -> {
+            UserContextDTO user = UserContext.getUser();
+            user.setOwnerId("123");
+            TaskInfoScheduledRequest taskInfoScheduledRequest = FakerUtils.fake(TaskInfoScheduledRequest.class);
+            taskInfoScheduledRequest.setScheduleId("489A1F7577");
+            taskInfoScheduledRequest.setScheduleTaskId("ujaj-20240904193254");
+            return MockMvcRequestBuilders.post(getMappingUrl(ScheduledController.class, "taskInfo", TaskInfoScheduledRequest.class))
+                    .content(JsonUtils.toJSONString(taskInfoScheduledRequest));
+        }, ScheduledErrorCode.USER_NOT_OWNER);
     }
 
     @Sql(scripts = {"/test-job.sql"})

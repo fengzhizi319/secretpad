@@ -15,9 +15,12 @@
  */
 package org.secretflow.secretpad.web;
 
-import org.secretflow.secretpad.web.constant.AuthConstants;
+
+import org.secretflow.secretpad.web.configuration.InnerPortMtlsConfig;
+import org.secretflow.secretpad.web.configuration.InnerPortSslConnectorFactory;
 
 import com.google.common.collect.Lists;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.connector.Connector;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +41,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
  * SecretPad application
@@ -61,6 +65,9 @@ public class SecretPadApplication {
     @Value("${server.compression.min-response-size}")
     private Integer compressionMinResponseSize;
 
+    @Resource
+    private InnerPortMtlsConfig innerPortMtlsConfig;
+
     public static void main(String[] args) throws UnknownHostException {
         ConfigurableApplicationContext context = SpringApplication.run(SecretPadApplication.class, args);
         Environment environment = context.getBean(Environment.class);
@@ -68,21 +75,23 @@ public class SecretPadApplication {
     }
 
     private static void printEnvironment(Environment environment) throws UnknownHostException {
-        log.info("SecretPad start success, http://{}:{} innerHttpPort:{} Profile:{}", InetAddress.getLocalHost().getHostAddress(), environment.getProperty("server.port"), environment.getProperty("server.http-port-inner"), environment.getActiveProfiles());
-        String userName, password;
-        try {
-            userName = environment.getProperty("secretpad.auth.pad_name", String.class, AuthConstants.USER_NAME);
-        } catch (Exception e) {
-            log.debug("initUserAndPwd failed use default", e);
-            userName = AuthConstants.USER_NAME;
-        }
-        try {
-            password = environment.getProperty("secretpad.auth.pad_pwd", String.class, AuthConstants.getRandomPassword());
-        } catch (Exception e) {
-            log.debug("initUserAndPwd failed use default", e);
-            password = AuthConstants.getRandomPassword();
-        }
-        log.info("userName:{} password:{}", userName, password);
+        log.info(startupBanner(environment, InetAddress.getLocalHost().getHostAddress()));
+    }
+
+    /**
+     * 启动横幅文本。安全整改 P0-1：历史横幅打印 {@code userName:admin password:12345678}，
+     * 任何能读日志的人都能拿到管理员口令。横幅现在只含地址、端口与 profile，
+     * 口令的唯一出口是 {@code secretpad.auth.initial-password-file}（见 DbDataInit）。
+     * 独立成方法是为了让用例能断言"横幅里没有口令"。
+     */
+    static String startupBanner(Environment environment, String hostAddress) {
+        return String.format("SecretPad start success, http://%s:%s innerHttpPort:%s Profile:%s; "
+                        + "initial admin credentials (first start only): see file %s",
+                hostAddress,
+                environment.getProperty("server.port"),
+                environment.getProperty("server.http-port-inner"),
+                Arrays.toString(environment.getActiveProfiles()),
+                environment.getProperty("secretpad.auth.initial-password-file", "./config/initial-admin-password"));
     }
 
     /**
@@ -92,20 +101,33 @@ public class SecretPadApplication {
      */
     @Bean
     public ServletWebServerFactory containerFactory() {
+        // 安全整改（docs/secretpad_auth.md P0-3）：内网 RPC 口是否升级为 mTLS 在这里做一次性拒绝检查——
+        // 「配了就必须生效，否则报错」，不允许 enabled=true 却缺材料，静默退回明文。
+        innerPortMtlsConfig.validate();
+        if (!innerPortMtlsConfig.isEnabled()) {
+            log.warn("secretpad.inner-port.mtls.enabled=false: the inner RPC port ({}) trusts the "
+                            + "'kuscia-origin-source' header alone, which any caller on the same network "
+                            + "segment can forge. See docs/secretpad_auth.md P0-3 before exposing this port "
+                            + "beyond a fully trusted network.",
+                    innerHttpPort);
+        }
         TomcatServletWebServerFactory tomcat = new TomcatServletWebServerFactory();
-        buildConnector(tomcat, httpPort);
-        buildConnector(tomcat, innerHttpPort);
+        buildConnector(tomcat, httpPort, false);
+        buildConnector(tomcat, innerHttpPort, true);
         tomcat.setUriEncoding(StandardCharsets.UTF_8);
         return tomcat;
     }
 
-    private void buildConnector(TomcatServletWebServerFactory tomcat, Integer innerHttpPort) {
-        Connector innerConnector = new Connector("org.apache.coyote.http11.Http11NioProtocol");
-        innerConnector.setPort(innerHttpPort);
-        innerConnector.setProperty(ConnectorCompression.COMPRESSION, "on");
-        innerConnector.setProperty(ConnectorCompression.COMPRESSION_MIN_RESPONSE_SIZE, String.valueOf(compressionMinResponseSize));
-        innerConnector.setProperty(ConnectorCompression.COMPRESSION_MIME_TYPES, mimeTypes);
-        tomcat.addAdditionalTomcatConnectors(innerConnector);
+    private void buildConnector(TomcatServletWebServerFactory tomcat, Integer port, boolean isInner) {
+        Connector connector = new Connector("org.apache.coyote.http11.Http11NioProtocol");
+        connector.setPort(port);
+        connector.setProperty(ConnectorCompression.COMPRESSION, "on");
+        connector.setProperty(ConnectorCompression.COMPRESSION_MIN_RESPONSE_SIZE, String.valueOf(compressionMinResponseSize));
+        connector.setProperty(ConnectorCompression.COMPRESSION_MIME_TYPES, mimeTypes);
+        if (isInner && innerPortMtlsConfig.isEnabled()) {
+            InnerPortSslConnectorFactory.applyMtls(connector, innerPortMtlsConfig);
+        }
+        tomcat.addAdditionalTomcatConnectors(connector);
     }
 
     private static class ConnectorCompression {

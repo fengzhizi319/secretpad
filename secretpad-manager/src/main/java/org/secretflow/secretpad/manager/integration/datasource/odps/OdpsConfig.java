@@ -46,6 +46,9 @@ public class OdpsConfig implements Serializable {
     @NotNull(message = "odps accessId cannot be null or empty")
     private String accessId;
 
+    // 安全整改（二次评审，见 docs/secretpad_auth.md §8，日志卫生）：同上层 OdpsDatasourceInfo，
+    // manager 层真正建连接用的明文密钥，防御性排除。
+    @ToString.Exclude
     @NotNull(message = "odps accessKey cannot be null or empty")
     private String accessKey;
 

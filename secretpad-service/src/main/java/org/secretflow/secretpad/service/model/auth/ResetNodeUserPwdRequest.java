@@ -46,6 +46,10 @@ public class ResetNodeUserPwdRequest {
     /**
      * passwordHash
      */
+    // 安全整改（二次评审，见 docs/secretpad_auth.md §8，日志卫生）：同 UserUpdatePwdRequest，
+    // 本类带 @ToString，两个哈希字段是可直接用于登录/改密比对的凭据等价物，排除避免被
+    // LoggingAspect 打进日志。
+    @ToString.Exclude
     @NotBlank
     @Schema(description = "passwordHash")
     private String passwordHash;
@@ -53,6 +57,7 @@ public class ResetNodeUserPwdRequest {
     /**
      * User password
      */
+    @ToString.Exclude
     @NotBlank
     @Schema(description = "user password")
     private String newPasswordHash;

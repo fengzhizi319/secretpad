@@ -74,6 +74,13 @@ public class KusciaGrpcConfig implements Serializable {
 
     private String keyFile;
 
+    /**
+     * 安全整改（docs/secretpad_auth.md P0-2）：出站到 Kuscia 的 gRPC 此前用
+     * {@code InsecureTrustManagerFactory}，等于不验证服务端证书。caFile 是本进程信任的 Kuscia
+     * 服务端证书签发方；TLS/MTLS 协议下必填，缺失即拒绝启动（fail-closed，不静默退化为不验证）。
+     */
+    private String caFile;
+
     public void validateAndProcess() {
         ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
         Validator validator = factory.getValidator();
@@ -91,6 +98,10 @@ public class KusciaGrpcConfig implements Serializable {
             case MTLS, TLS -> {
                 if (StringUtils.isEmpty(certFile) || StringUtils.isEmpty(keyFile) || StringUtils.isEmpty(token)) {
                     throw new IllegalArgumentException("certFile,keyFile,token cannot be null when protocol is TLS or MTLS");
+                }
+                if (StringUtils.isEmpty(caFile)) {
+                    throw new IllegalArgumentException("caFile cannot be null when protocol is TLS or MTLS "
+                            + "(server certificate verification requires a trusted CA; see docs/secretpad_auth.md P0-2)");
                 }
                 if (new File(this.token).exists()) {
                     try {

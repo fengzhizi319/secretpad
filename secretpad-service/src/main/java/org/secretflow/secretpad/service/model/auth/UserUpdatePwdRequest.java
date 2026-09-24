@@ -18,6 +18,7 @@ package org.secretflow.secretpad.service.model.auth;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
+import lombok.ToString;
 import org.hibernate.validator.constraints.Length;
 
 /**
@@ -38,6 +39,11 @@ public class UserUpdatePwdRequest {
     /**
      * User  old password
      */
+    // 安全整改（二次评审，见 docs/secretpad_auth.md §8，日志卫生）：@Data 会给这三个字段生成默认
+    // toString()，而 LoggingAspect 对每个 controller 方法都会把参数 toString() 后打进 INFO 日志——
+    // 本系统登录/改密走的是前端 SM3 预哈希、服务端直接比对哈希（P1-1 的既有设计），哈希本身即等价于
+    // 凭据，泄露哈希等同于泄露密码，必须排除。
+    @ToString.Exclude
     @NotBlank
     @Length(min = 8, message = "password length is greater than 8 ")
     @Schema(description = "user old password")
@@ -46,6 +52,7 @@ public class UserUpdatePwdRequest {
     /**
      * User new password
      */
+    @ToString.Exclude
     @NotBlank
     @Length(min = 8, message = "password length is greater than 8 ")
     @Schema(description = "user new password")
@@ -54,6 +61,7 @@ public class UserUpdatePwdRequest {
     /**
      * User confirm password
      */
+    @ToString.Exclude
     @NotBlank
     @Length(min = 8, message = "password length is greater than 8 ")
     @Schema(description = "user confirm password")

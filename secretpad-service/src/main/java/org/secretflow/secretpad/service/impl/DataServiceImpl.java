@@ -140,7 +140,13 @@ public class DataServiceImpl implements DataService {
                 break;
             }
         }
-        SafeFileUtils.checkPathInWhitelist(target, List.of(storeDir));
+        // 安全整改（二次评审，见 docs/secretpad_auth.md §8）：此前调用了 checkPathInWhitelist 却完全
+        // 丢弃返回值——白名单检查形同虚设。现在真正据此拒绝，与 nodeIdValidCheck 的正则校验构成两道
+        // 独立防线（正则挡在拼路径之前，这里挡在真正落盘之前，二者任一失守都还有另一道兜底）。
+        if (!SafeFileUtils.checkPathInWhitelist(target, List.of(storeDir))) {
+            LOGGER.error("target file {} is not in the whitelist dir {}, deny the upload.", target, storeDir);
+            throw SecretpadException.of(DataErrorCode.ILLEGAL_PARAMS_ERROR, "target path is not allowed");
+        }
         if (target.exists()) {
             LOGGER.warn("After try some times generate random file name, the target random file {} still exists.", dirPath + randomFileName);
             throw SecretpadException.of(DataErrorCode.FILE_EXISTS_ERROR);
@@ -368,16 +374,29 @@ public class DataServiceImpl implements DataService {
     }
 
     /**
+     * 安全整改（二次评审，见 docs/secretpad_auth.md §8，路径穿越）：nodeId 只允许 DNS 标签风格的字符
+     * （与 {@code InstRegisterRequest.domainId} 的既有校验口径一致——同一个"节点 ID"概念，不该有两种
+     * 松紧不同的校验规则）。历史实现只挡 {@code /} 与 {@code \\}，放过了 {@code nodeId = ".."}：
+     * 它不含任何斜杠，却能让 {@link Path#of(String, String...)} 拼出 {@code storeDir/..}，规范化后
+     * 指向 {@code storeDir} 的上一级目录——而本该在落盘前兜底的 {@link SafeFileUtils#checkPathInWhitelist}
+     * 此前调用了但完全没检查返回值（见 {@link #upload}），双重失效叠加成一个真实可写的路径穿越。
+     * 现在用正则钉死允许的字符集，{@code ".."} / {@code "."} 这类值直接在这一步被拒绝，不必依赖下游的
+     * 白名单兜底才能发现。
+     */
+    private static final java.util.regex.Pattern NODE_ID_PATTERN =
+            java.util.regex.Pattern.compile("^[a-z0-9]([a-z0-9.-]{0,61}[a-z0-9])?$");
+
+    /**
      * Valid nodeId if contains impermissible char
      * <p>
-     * 校验 nodeId 不包含 {@code /} 或 {@code \}，防止构造非法目录路径。
+     * 校验 nodeId 是否为合法的节点 ID 格式，防止构造非法目录路径（含路径穿越）。
      *
      * @param nodeId target nodeId
      */
     private void nodeIdValidCheck(String nodeId) {
-        if (nodeId.contains("/") || nodeId.contains("\\")) {
-            LOGGER.error("node id {} contains / or \\, which not allowed.", nodeId);
-            throw SecretpadException.of(DataErrorCode.ILLEGAL_PARAMS_ERROR, "node ID cannot contains \\ or /");
+        if (nodeId == null || !NODE_ID_PATTERN.matcher(nodeId).matches()) {
+            LOGGER.error("node id {} is not a valid node id, which not allowed.", nodeId);
+            throw SecretpadException.of(DataErrorCode.ILLEGAL_PARAMS_ERROR, "node ID must be a valid node identifier");
         }
     }
 

@@ -373,7 +373,7 @@ function start() {
 		create_secretpad_svc "${KUSCIA_CTR}" "${PAD_CTR}" "$NODE_ID"
 		log "Web server started successfully"
 		log "Please visit the website http://localhost:${PAD_PORT} (or http://{the IPAddress of this machine}:$PAD_PORT) to experience the Kuscia web's functions ."
-		log "The login name:'${SECRETPAD_USER_NAME}' ,The login password:'${SECRETPAD_PASSWORD}' ."
+		log "The login name:'${SECRETPAD_USER_NAME}'. The password is the one you supplied via SECRETPAD_PASSWORD, or — if unset — the one-time initial password in ${PAD_INSTALL_DIR}/config/initial-admin-password (read it, log in, change it, delete the file)."
 		log "The data would be stored in the path: $PAD_INSTALL_DIR ."
 	fi
 }

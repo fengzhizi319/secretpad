@@ -256,8 +256,16 @@ public class ScheduledServiceImpl implements ScheduledService {
      */
     @Override
     public SecretPadPageResponse<PageScheduledVO> queryPage(PageScheduledRequest request, Pageable pageable) {
+        // 安全整改（二次评审，见 docs/secretpad_auth.md §8，IDOR）：本方法此前只按请求体里的
+        // projectId/search/status 过滤，没有任何 owner 维度限制——任何认证用户只要猜到/枚举到别的
+        // 租户的 projectId，就能分页看到该项目下全部调度记录。这里叠加 owner 等值谓词，口径与
+        // info()/offline()/del() 等单条读写方法里的 checkOwner() 完全一致（同样是严格等值，
+        // 不为 CENTER 平台特例放行），只是从"事后校验单条"变成"查询期就地过滤整页"。
+        String ownerId = UserContext.getUser().getOwnerId();
         Page<ProjectScheduleDO> page = projectScheduleRepository.findAll(
-                (root, criteriaQuery, criteriaBuilder) -> JpaQueryHelper.getPredicate(root, request, criteriaBuilder),
+                (root, criteriaQuery, criteriaBuilder) -> criteriaBuilder.and(
+                        JpaQueryHelper.getPredicate(root, request, criteriaBuilder),
+                        criteriaBuilder.equal(root.get("owner"), ownerId)),
                 pageable);
         if (page.isEmpty()) {
             return SecretPadPageResponse.toPage(null, 0);
@@ -297,7 +305,12 @@ public class ScheduledServiceImpl implements ScheduledService {
 
     @Override
     public ProjectJobVO info(ScheduledInfoRequest request) {
+        // 安全整改（二次评审，见 docs/secretpad_auth.md §8，IDOR）：offline()/del()/taskStop()/taskRerun()
+        // 都在取到调度记录后立刻 checkOwner，本方法此前遗漏了这一步——任何调用方只要能拿到一个
+        // 有效的 scheduleId（不是秘密，且可通过 §8 记录的 taskPage 缺租户范围一并枚举到），就能读到
+        // 其他租户的完整作业/图详情（节点、边、各方名称、任务进度）。
         ProjectScheduleDO projectScheduleDO = checkProjectScheduleDO(request.getScheduleId());
+        checkOwner(projectScheduleDO.getOwner());
         ProjectJobDO job = projectScheduleDO.getJobInfo();
         List<ProjectResultDO> projectResultDOS = projectResultRepository.findByProjectJobId(projectScheduleDO.getProjectId(), job.getUpk().getJobId());
         log.info("getProjectJob projectResultDOS ={}", projectResultDOS);
@@ -321,8 +334,14 @@ public class ScheduledServiceImpl implements ScheduledService {
     @Override
     public SecretPadPageResponse<TaskPageScheduledVO> taskPage(TaskPageScheduledRequest request, Pageable pageable) {
         log.info("taskPage, request:{}, of:{}", request, pageable);
+        // 安全整改（二次评审，见 docs/secretpad_auth.md §8，IDOR）：TaskPageScheduledRequest 连
+        // projectId 字段都没有，只靠 scheduleId（不是秘密）过滤，任何认证用户传一个别的租户的
+        // scheduleId 就能分页枚举其全部任务。叠加与 queryPage() 相同的 owner 等值谓词收口。
+        String ownerId = UserContext.getUser().getOwnerId();
         Page<ProjectScheduleTaskDO> page = projectScheduleTaskRepository.findAll(
-                (root, criteriaQuery, criteriaBuilder) -> JpaQueryHelper.getPredicate(root, request, criteriaBuilder),
+                (root, criteriaQuery, criteriaBuilder) -> criteriaBuilder.and(
+                        JpaQueryHelper.getPredicate(root, request, criteriaBuilder),
+                        criteriaBuilder.equal(root.get("owner"), ownerId)),
                 pageable);
         if (page.isEmpty()) {
             return SecretPadPageResponse.toPage(null, 0);
@@ -433,8 +452,11 @@ public class ScheduledServiceImpl implements ScheduledService {
 
     @Override
     public ProjectJobVO taskInfo(TaskInfoScheduledRequest request) {
+        // 安全整改（二次评审，见 docs/secretpad_auth.md §8，IDOR）：同 info()，taskStop()/taskRerun()
+        // 都在取到任务记录后立刻 checkOwner，本方法此前遗漏了这一步。
         ProjectScheduleDO projectScheduleDO = checkProjectScheduleDO(request.getScheduleId());
         ProjectScheduleTaskDO projectScheduleTaskDO = checkProjectScheduleTaskDO(request.getScheduleTaskId());
+        checkOwner(projectScheduleTaskDO.getOwner());
         String scheduleJobId = projectScheduleTaskDO.getScheduleJobId();
         Optional<ProjectScheduleJobDO> projectScheduleJobDOOptional = projectScheduleJobRepository.findByJobId(scheduleJobId);
         if (projectScheduleJobDOOptional.isEmpty()) {

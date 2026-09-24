@@ -18,24 +18,15 @@ sh install.sh lite -n <节点ID> -t <节点部署令牌> -p 30002 -m 'http://<Ma
 
 部署成功后访问 http://localhost:8085（端口号由 -s 参数指定）。
 
-如果在部署的时候没有自行设置账号及密码，系统会提供默认的账号名 **admin** 以及随机生成的密码。
+如果在部署的时候没有自行设置账号及密码，系统会提供默认的账号名 **admin** 以及随机生成的初始密码，
+写在容器内 `/app/config/initial-admin-password`（宿主机对应安装目录下的 `config/initial-admin-password`，权限 0600）。
+首次登录后请立即修改密码并删除该文件。
 
 
 ![login.png](../imgs/operation/master/login.png)
 
-如果用户忘记了账号或密码，可以执行以下命令，查看当前运行的容器：
-
-```shell
- docker ps
-```
-
-找到 SecretPad 的容器 ID，然后执行：
-
-```shell
- docker logs <CONTAINER ID>
-```
-
-即可查看账号及密码。
+初始密码**不会**出现在容器日志里（安全整改 P0-1）。如果初始密码文件已删除且忘记了密码，
+用管理员账号重置，或在停止服务后删除该账号记录再重启（重启只在账号不存在时重新初始化，不会覆盖已有账号的密码）。
 
 ## 添加数据
 

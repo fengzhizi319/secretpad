@@ -13,6 +13,11 @@ secretpad:
   gateway: ${KUSCIA_GW_ADDRESS:127.0.0.1:18301} # install.sh -q envoy port (used in autonomy or master or edge mode)
   logs:
     path: ../log
+  auth:
+    # 【仅本地开发】固定测试口令 admin/12345678（安全整改 P0-1 的显式 opt-in 例外，docs/secretpad_auth.md）。
+    # 只在这个 profile 打开，方便 IDE 本地起服务后直接登录；生产 application.yaml 与 edge/p2p 部署
+    # profile 都没有这一项，缺省即关闭（走随机口令 + 0600 文件下发）。
+    fixed-test-password-enabled: true
 
 kuscia:
   nodes:
@@ -23,6 +28,7 @@ kuscia:
       protocol: ${KUSCIA_PROTOCOL:tls}
       cert-file: config/certs/client.crt
       key-file: config/certs/client.pem
+      ca-file: config/certs/ca.crt  # 受信 CA（P0-2：验证 Kuscia 服务端证书用，替代此前的 InsecureTrustManagerFactory）
       token: config/certs/token
 
     - domainId: alice
@@ -32,6 +38,7 @@ kuscia:
       protocol: ${KUSCIA_PROTOCOL:tls}
       cert-file: config/certs/alice/client.crt
       key-file: config/certs/alice/client.pem
+      ca-file: config/certs/alice/ca.crt  # 受信 CA（P0-2：验证 Kuscia 服务端证书用，替代此前的 InsecureTrustManagerFactory）
       token: config/certs/alice/token
 
     - domainId: bob
@@ -41,4 +48,5 @@ kuscia:
       protocol: ${KUSCIA_PROTOCOL:tls}
       cert-file: config/certs/bob/client.crt
       key-file: config/certs/bob/client.pem
+      ca-file: config/certs/bob/ca.crt  # 受信 CA（P0-2：验证 Kuscia 服务端证书用，替代此前的 InsecureTrustManagerFactory）
       token: config/certs/bob/token

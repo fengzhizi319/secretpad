@@ -10,6 +10,12 @@ secretpad:
   platform-type: TEST
   auth:
     enabled: false
+    initial-password-file: ../tmp/initial-admin-password
+    # 【仅自动化测试】同上，固定测试口令 admin/12345678，方便手工在 test profile 下起服务联调登录。
+    fixed-test-password-enabled: true
+  # 登录限速在测试环境关闭：单测会在极短时间内对同一模拟 IP 重复调用 /api/login（锁定边界测试），
+  # 与生产限速的设计目的冲突。生产默认见 config/application.yaml（P1-4，docs/secretpad_auth.md）。
+  login-rate-limit-per-minute: -1
   response:
     extra-headers:
       Content-Security-Policy: "base-uri 'self';frame-src 'self';worker-src blob: 'self' data:;object-src 'self';"

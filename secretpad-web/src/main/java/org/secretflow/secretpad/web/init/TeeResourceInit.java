@@ -101,6 +101,7 @@ public class TeeResourceInit implements CommandLineRunner {
                             .protocol(KusciaProtocolEnum.getByName(teeProtocol))
                             .certFile("config/certs/tee/client.crt")
                             .keyFile("config/certs/tee/client.pem")
+                            .caFile("config/certs/tee/ca.crt")
                             .token("config/certs/tee/token")
                             .build());
         }

@@ -41,6 +41,7 @@ public class KusciaGrpcConfigTest {
             .token("token.txt")
             .certFile("cert.pem")
             .keyFile("key.pem")
+            .caFile("ca.pem")
             .build();
 
     /**
@@ -114,6 +115,25 @@ public class KusciaGrpcConfigTest {
     public void testValidateAndProcessKeyFileEmpty() {
         config.setKeyFile(null);
         config.setProtocol(KusciaProtocolEnum.TLS);
+        assertThrows(IllegalArgumentException.class, config::validateAndProcess);
+    }
+
+    /**
+     * 安全整改守卫（docs/secretpad_auth.md P0-2）：TLS/MTLS 下 caFile 缺失必须拒绝启动。
+     * 历史实现没有 caFile 这个概念，出站直接用 InsecureTrustManagerFactory 不验证服务端证书；
+     * 这条用例钉住"没有 CA 就是配置错误，不是可以静默退化的选项"。
+     */
+    @Test
+    public void testValidateAndProcessCaFileEmpty() {
+        config.setCaFile(null);
+        config.setProtocol(KusciaProtocolEnum.TLS);
+        assertThrows(IllegalArgumentException.class, config::validateAndProcess);
+    }
+
+    @Test
+    public void testValidateAndProcessCaFileEmptyMtls() {
+        config.setCaFile("");
+        config.setProtocol(KusciaProtocolEnum.MTLS);
         assertThrows(IllegalArgumentException.class, config::validateAndProcess);
     }
 }

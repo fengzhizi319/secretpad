@@ -37,6 +37,10 @@ public class MysqlDatasourceInfo extends DataSourceInfo{
     private String endpoint;
     @NotBlank(message = "mysql user cannot be null or empty")
     private String user;
+    // 安全整改（二次评审，见 docs/secretpad_auth.md §8，日志卫生）：本类带 @ToString 且无排除字段，
+    // 任何未来在此对象上调用 toString()/直接日志打印（如调试时 log.debug("info={}", info)）都会把
+    // 数据库明文密码写进日志——防御性提前挖掉这个地雷，而不是等到真的有人加了那行日志才修。
+    @ToString.Exclude
     @NotBlank(message = "mysql password cannot be null or empty")
     private String password;
     @NotBlank(message = "mysql database cannot be null or empty")

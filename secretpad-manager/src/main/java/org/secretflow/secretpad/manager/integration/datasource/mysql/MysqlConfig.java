@@ -47,6 +47,9 @@ public class MysqlConfig implements Serializable {
     @NotNull(message = "mysql user cannot be null or empty")
     private String user;
 
+    // 安全整改（二次评审，见 docs/secretpad_auth.md §8，日志卫生）：同上层 MysqlDatasourceInfo，
+    // 这里是 manager 层真正拿去建连接的配置对象，同样防御性排除，避免未来任何调试日志泄露明文密码。
+    @ToString.Exclude
     @NotNull(message = "mysql password cannot be null or empty")
     private String password;
 

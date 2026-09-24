@@ -93,7 +93,10 @@ class DataControllerTest extends ControllerTest {
     @Test
     void upload() throws Exception {
         assertMultipartResponse(() -> {
-            String nodeId = FakerUtils.fake(String.class);
+            // 安全整改回归（docs/secretpad_auth.md §8）：nodeIdValidCheck 收紧为 DNS-label 风格白名单正则后，
+            // FakerUtils 生成的随机字符串（可能含大写字母等字符）不再是合法 nodeId，改用一个真实场景下
+            // 合法的固定值，不再依赖随机字符串偶然落在正则允许的字符集内。
+            String nodeId = "alice";
             MockMultipartFile file = new MockMultipartFile("file", "test.csv", MediaType.APPLICATION_JSON_VALUE, "some xml".getBytes());
             return MockMvcRequestBuilders.multipart(getMappingUrl(DataController.class, "upload", String.class, MultipartFile.class))
                     .file(file).contentType(MediaType.MULTIPART_FORM_DATA_VALUE).param("Node-Id", nodeId);

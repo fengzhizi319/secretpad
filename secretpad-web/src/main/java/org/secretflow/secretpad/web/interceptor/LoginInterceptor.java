@@ -29,6 +29,7 @@ import org.secretflow.secretpad.persistence.repository.ProjectNodeRepository;
 import org.secretflow.secretpad.persistence.repository.UserTokensRepository;
 import org.secretflow.secretpad.service.EnvService;
 import org.secretflow.secretpad.service.SysResourcesBizService;
+import org.secretflow.secretpad.web.configuration.InnerPortMtlsConfig;
 import org.secretflow.secretpad.web.util.AuthUtils;
 
 import jakarta.annotation.Resource;
@@ -86,6 +87,9 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Resource
     private InnerPortPathConfig innerPortPathConfig;
+
+    @Resource
+    private InnerPortMtlsConfig innerPortMtlsConfig;
 
     @Autowired
     public LoginInterceptor(UserTokensRepository userTokensRepository, EnvService envService,
@@ -193,6 +197,18 @@ public class LoginInterceptor implements HandlerInterceptor {
      * @param request HTTP请求对象，从中提取节点身份信息
      */
     private void processByNodeRpcRequest(HttpServletRequest request) {
+        // 安全整改（docs/secretpad_auth.md P0-3）：mTLS 启用时，Tomcat 的 SSLHostConfig 已经在握手阶段
+        // 要求并验证了客户端证书（clientAuth=required）——没有受信证书的连接根本建立不起来，
+        // 到不了这里。这条检查是纵深防御：万一某个环境把这个连接器错配成允许匿名 TLS，
+        // 这里仍然把关，而不是悄悄退回"只看 header"的旧行为。
+        if (innerPortMtlsConfig.isEnabled()) {
+            Object clientCert = request.getAttribute("jakarta.servlet.request.X509Certificate");
+            if (!(clientCert instanceof java.security.cert.X509Certificate[] certs) || certs.length == 0) {
+                throw SecretpadException.of(AuthErrorCode.AUTH_FAILED,
+                        "mTLS is enabled on the inner port but no verified client certificate was presented.");
+            }
+        }
+
         // 从HTTP header中获取来源节点ID
         // kuscia-origin-source 是Kuscia框架定义的header，用于标识请求的来源节点
         String sourceNodeId = request.getHeader("kuscia-origin-source");

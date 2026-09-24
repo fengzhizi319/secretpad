@@ -97,7 +97,7 @@ bash scripts/install-kuscia-only.sh master -P notls \
 
 5. **登录**
 
-   当前源码已固定为 `admin / 12345678`（详见 `docs/development/test-guides/cipher12345678.md`）。
+   用户名 `admin`；初始口令首次启动随机生成并写入 `config/initial-admin-password`（详见 `docs/development/test-guides/cipher12345678.md`）。
 
 ## 常用命令
 

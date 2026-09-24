@@ -20,6 +20,7 @@ kuscia:
       protocol: ${KUSCIA_PROTOCOL:tls}
       cert-file: config/certs/client.crt
       key-file: config/certs/client.pem
+      ca-file: config/certs/ca.crt  # 受信 CA（P0-2：验证 Kuscia 服务端证书用，替代此前的 InsecureTrustManagerFactory）
       token: config/certs/token
 
 data:

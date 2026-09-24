@@ -41,6 +41,9 @@ public class OdpsDatasourceInfo extends DataSourceInfo {
     @NotBlank(message = "odps accessId cannot be null or empty")
     private String accessId;
 
+    // 安全整改（二次评审，见 docs/secretpad_auth.md §8，日志卫生）：同 MysqlDatasourceInfo.password，
+    // accessKey 是 ODPS 的明文密钥，本类 @ToString 默认会把它打进日志，防御性排除。
+    @ToString.Exclude
     @NotBlank(message = "odps accessKey cannot be null or empty")
     private String accessKey;
 

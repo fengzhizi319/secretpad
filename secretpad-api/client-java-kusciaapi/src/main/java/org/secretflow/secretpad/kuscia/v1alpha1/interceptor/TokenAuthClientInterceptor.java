@@ -44,7 +44,11 @@ public class TokenAuthClientInterceptor implements ClientInterceptor {
             @Override
             public void start(Listener<RespT> responseListener, Metadata headers) {
                 headers.put(Metadata.Key.of(KusciaAPIConstants.TOKEN_HEADER, Metadata.ASCII_STRING_MARSHALLER), token);
-                log.info("[{}] add token header: {} {}", domainId, KusciaAPIConstants.TOKEN_HEADER, token);
+                // 安全整改（docs/secretpad_auth.md P0-2）：此前把 Kuscia API token 明文打进日志，
+                // 任何能读日志的人都能拿到它冒充 SecretPad 调 Kuscia API。只记 header 名，不记值。
+                if (log.isDebugEnabled()) {
+                    log.debug("[{}] add token header: {}", domainId, KusciaAPIConstants.TOKEN_HEADER);
+                }
                 super.start(responseListener, headers);
             }
         };

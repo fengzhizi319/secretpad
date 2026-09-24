@@ -28,6 +28,18 @@ server:
   http-port: 8080                            # HTTP 服务端口（非加密）
   http-port-inner: 9001                      # 内部通信端口，用于集群内节点间通信
   port: 443                                  # HTTPS 服务端口（加密，生产环境推荐）
+
+  # 内网口（9001）mTLS（安全整改 P0-3，docs/secretpad_auth.md）：默认关闭——内网口在关闭状态下
+  # 完全依赖可伪造的 kuscia-origin-source 头识别节点身份，只适合"网络层已充分隔离"的部署。
+  # 生产环境如果 Kuscia 网关一侧能配置客户端证书，强烈建议开启：
+  inner-port:
+    mtls:
+      enabled: ${SECRETPAD_INNER_MTLS_ENABLED:false}
+      key-store: ${SECRETPAD_INNER_MTLS_KEY_STORE:}            # 内网口自身身份证书（PKCS12）
+      key-store-password: ${SECRETPAD_INNER_MTLS_KEY_STORE_PASSWORD:}
+      key-alias: ${SECRETPAD_INNER_MTLS_KEY_ALIAS:}
+      trust-store: ${SECRETPAD_INNER_MTLS_TRUST_STORE:}        # 只信任这里面的 CA（预期是 Kuscia 网关签发 CA）
+      trust-store-password: ${SECRETPAD_INNER_MTLS_TRUST_STORE_PASSWORD:}
   
   # SSL/TLS 安全配置
   ssl:
@@ -209,6 +221,7 @@ kuscia:
       protocol: ${KUSCIA_PROTOCOL:tls}                 # 通信协议：TLS 加密
       cert-file: config/certs/client.crt               # 客户端证书文件路径（双向 TLS 认证）
       key-file: config/certs/client.pem                # 客户端私钥文件路径
+      ca-file: config/certs/ca.crt  # 受信 CA（P0-2：验证 Kuscia 服务端证书用，替代此前的 InsecureTrustManagerFactory）
       token: config/certs/token                        # 访问令牌文件路径
 
     # ---- 参与方节点 Alice 配置 ----
@@ -219,6 +232,7 @@ kuscia:
       protocol: ${KUSCIA_PROTOCOL:tls}                 # 通信协议
       cert-file: config/certs/alice/client.crt         # Alice 的客户端证书
       key-file: config/certs/alice/client.pem          # Alice 的客户端私钥
+      ca-file: config/certs/alice/ca.crt  # 受信 CA（P0-2：验证 Kuscia 服务端证书用，替代此前的 InsecureTrustManagerFactory）
       token: config/certs/alice/token                  # Alice 的访问令牌
 
     # ---- 参与方节点 Bob 配置 ----
@@ -229,6 +243,7 @@ kuscia:
       protocol: ${KUSCIA_PROTOCOL:tls}                 # 通信协议
       cert-file: config/certs/bob/client.crt           # Bob 的客户端证书
       key-file: config/certs/bob/client.pem            # Bob 的客户端私钥
+      ca-file: config/certs/bob/ca.crt  # 受信 CA（P0-2：验证 Kuscia 服务端证书用，替代此前的 InsecureTrustManagerFactory）
       token: config/certs/bob/token                    # Bob 的访问令牌
 
 
@@ -269,6 +284,8 @@ secretpad:
     enabled: true                                      # 启用身份认证，要求用户提供用户名和密码
     pad_name: ${SECRETPAD_USER_NAME}                   # 管理员用户名，通过环境变量 SECRETPAD_USER_NAME 设置
     pad_pwd: ${SECRETPAD_PASSWORD}                     # 管理员密码，通过环境变量 SECRETPAD_PASSWORD 设置
+    # 初始管理员口令文件（0600）：pad_pwd 未注入时随机生成的口令只写到这里一次，不进日志（P0-1）
+    initial-password-file: ${SECRETPAD_INITIAL_PASSWORD_FILE:./config/initial-admin-password}
   
   # HTTP 响应安全头配置
   response:
@@ -412,5 +429,14 @@ ip:
       - 172.16.0.0/12                                  # 阻止 B 类私有地址段
       - 192.168.0.0/16                                 # 阻止 C 类私有地址段
       - 33.0.0.0/8                                     # 阻止保留地址段
+      # 安全整改（二次评审，见 docs/secretpad_auth.md §8，SSRF）：以下两类此前完全缺失。
+      # 169.254.0.0/16 是链路本地地址段，覆盖各大云厂商的实例元数据端点
+      # （如 169.254.169.254，AWS/GCP/Azure/阿里云通用），是 SSRF 最常见的攻击目标之一——
+      # 不拦这一段，等于把云环境下最值钱的攻击面留在外面。
+      - 169.254.0.0/16                                 # 阻止链路本地地址段（含云元数据端点）
+      # IpFilter 的地址解析比对已修复 IPv6 支持（此前的实现结构性地判不对任何 IPv6 地址，
+      # 相当于黑名单对 IPv6 完全隐式失效），配套补上 IPv6 的回环与链路本地地址段。
+      - ::1/128                                        # 阻止 IPv6 本地回环地址
+      - fe80::/10                                      # 阻止 IPv6 链路本地地址段
                                                      # 注意：生产环境中应根据实际网络拓扑调整此配置
                                                      # 如果 SecretPad 部署在内网，需要允许相应的私有地址段

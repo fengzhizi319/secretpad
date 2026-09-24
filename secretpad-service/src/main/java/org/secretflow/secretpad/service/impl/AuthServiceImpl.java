@@ -39,6 +39,7 @@ import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -164,6 +165,22 @@ public class AuthServiceImpl implements AuthService {
             cache.put(userName, lockInfo);
             throw SecretpadException.of(AuthErrorCode.USER_PASSWORD_ERROR, String.valueOf(maxAttempts - --failedAttempts));
         }
+
+        // 安全整改（docs/secretpad_auth.md P1-2，对应现状清单 H1）：锁定状态必须先于口令比对判断，
+        // 且判断依据是"当前时间是否已经过了 lockedInvalidTime"，而不是完全跳过这一步。
+        // 历史实现从未读取 lockedInvalidTime——账号"锁定"期间只要口令正确依然登录成功，锁定形同虚设
+        // （对撞库没有实质拦截意义：撞对了永远放行）；而错够 maxAttempts 次之后，因为没有任何地方
+        // 检查锁是否已过期并复位，账号会**永久锁死**，与提示文案"N 分钟后重试"不符。
+        if (Objects.nonNull(user.getLockedInvalidTime())) {
+            if (currentTime.isBefore(user.getLockedInvalidTime())) {
+                long remainingMinutes = Duration.between(currentTime, user.getLockedInvalidTime()).toMinutes() + 1;
+                throw SecretpadException.of(AuthErrorCode.USER_IS_LOCKED, String.valueOf(remainingMinutes));
+            }
+            // 锁定窗口已过期：先复位计数与锁定时间，再按正常流程比对口令——复位本身不代表口令正确，
+            // 只是让这个账号重新回到"可以再次尝试"的状态，错误口令仍然会重新计数。
+            userService.userUnlock(user);
+        }
+
         //checkPassword success
         if (user.getPasswordHash().equals(passwordHash)) {
             //lock invalid
