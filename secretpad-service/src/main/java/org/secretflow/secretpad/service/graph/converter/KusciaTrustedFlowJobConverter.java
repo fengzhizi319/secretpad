@@ -197,11 +197,11 @@ public class KusciaTrustedFlowJobConverter implements JobConverter {
     }
 
     public String getTaskInitiatorId() throws CertificateException, IOException {
-        //BASE32(SHA256(DER(X.509 public key)))
+        //BASE32(SM3(DER(X.509 public key)))
         X509Certificate x509Certificate = CertUtils.loadX509Cert("./config/certs/ca.crt");
         PublicKey publicKey = x509Certificate.getPublicKey();
         byte[] encoded = publicKey.getEncoded();
-        byte[] hash = Sha256Utils.hash(encoded);
+        byte[] hash = Sm3Utils.hash(encoded);
         return new Base32().encodeToString(hash).replaceAll("=", "");
     }
 

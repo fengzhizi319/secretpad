@@ -17,7 +17,7 @@ package org.secretflow.secretpad.web.init;
 
 import org.secretflow.secretpad.common.enums.UserOwnerTypeEnum;
 import org.secretflow.secretpad.common.util.FileUtils;
-import org.secretflow.secretpad.common.util.Sha256Utils;
+import org.secretflow.secretpad.common.util.Sm3Utils;
 import org.secretflow.secretpad.persistence.entity.AccountsDO;
 import org.secretflow.secretpad.persistence.repository.UserAccountsRepository;
 import org.secretflow.secretpad.service.dataproxy.DataProxyService;
@@ -134,7 +134,7 @@ public class DbDataInit implements CommandLineRunner {
 
         AccountsDO accountsDO = AccountsDO.builder()
                 .name(username)
-                .passwordHash(Sha256Utils.hash(password))
+                .passwordHash(Sm3Utils.hash(password))
                 .ownerType(UserOwnerTypeEnum.fromString(platformType))
                 .ownerId(nodeId)
                 .instId("")

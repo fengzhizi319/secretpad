@@ -76,10 +76,21 @@
         <java-jwt.version>4.3.0</java-jwt.version>
         <odps-code.version>0.48.8-public</odps-code.version>
         <antlr4.version>4.13.0</antlr4.version>
+        <bouncycastle.version>1.78.1</bouncycastle.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.secretflow</groupId>
                 <artifactId>secretpad-common</artifactId>

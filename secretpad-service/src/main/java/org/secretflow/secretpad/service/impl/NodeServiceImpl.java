@@ -173,7 +173,7 @@ public class NodeServiceImpl implements NodeService {
         NodeUserCreateRequest nodeUserCreateParam = new NodeUserCreateRequest();
         nodeUserCreateParam.setNodeId(nodeId);
         nodeUserCreateParam.setName(nodeId);
-        nodeUserCreateParam.setPasswordHash(Sha256Utils.hash(nodeId + "12#$qwER"));
+        nodeUserCreateParam.setPasswordHash(Sm3Utils.hash(nodeId + "12#$qwER"));
         nodeUserService.create(nodeUserCreateParam);
 
         return nodeId;

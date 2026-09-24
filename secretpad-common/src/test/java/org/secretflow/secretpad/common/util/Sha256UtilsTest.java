@@ -27,6 +27,6 @@ public class Sha256UtilsTest {
     @Test
     void hash() {
         String hash = Sha256Utils.hash("12#$qwER");
-        Assertions.assertEquals(hash, "b524e25cf0067afea0fba7329d76a06950ab24175269383f1611a8a9dfb0d322", "not support");
+        Assertions.assertEquals("8ccf05454275f10f634e1a6402d6c82e9a9b2f7e29251db0bdd6a78d93153d40", hash, "not support");
     }
 }

@@ -62,7 +62,7 @@ function account_settings() {
 		fi
 	done
 	stty echo # echo display user input
-	password_hash=$(echo -n "${USER_PASSWD}" | sha256sum | cut -d " " -f 1)
+	password_hash=$(echo -n "${USER_PASSWD}" | openssl dgst -sm3 | awk '{print $NF}')
 	sqlite3 ${DB_PATH} "insert into user_accounts (name, password_hash) values (${USER_NAME}, ${password_hash})"
 	echo ""
 	log "User ${USER_NAME} is set!"
@@ -72,7 +72,7 @@ function register() {
 	local RET
 	check_user_name "${USER_NAME}"
 	OWNER_TYPE=$(echo "${OWNER_TYPE}" | tr '[:lower:]' '[:upper:]')
-	password_hash=$(echo -n "${USER_PASSWD}" | sha256sum | cut -d " " -f 1)
+	password_hash=$(echo -n "${USER_PASSWD}" | openssl dgst -sm3 | awk '{print $NF}')
 	log "username = ${USER_NAME}, owner_type = ${OWNER_TYPE}, owner_id = ${OWNER_ID}"
 	sqlite3 ${DB_PATH} "insert into user_accounts (name, password_hash, owner_type, owner_id) values ('${USER_NAME}', '${password_hash}', '${OWNER_TYPE}', '${OWNER_ID}' );"
 	log "User ${USER_NAME} is set!"
